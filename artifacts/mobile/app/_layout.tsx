@@ -9,12 +9,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
+import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { NotificationsProvider } from "@/context/NotificationsContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -35,6 +37,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [user, isLoading, segments, router]);
 
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#F9F6F2", alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" color="#C4526E" />
+      </View>
+    );
+  }
+
   return <>{children}</>;
 }
 
@@ -49,8 +59,20 @@ function RootLayoutNav() {
           options={{ headerShown: false, presentation: "card" }}
         />
         <Stack.Screen
+          name="book/[id]"
+          options={{ headerShown: false, presentation: "modal" }}
+        />
+        <Stack.Screen
           name="team-builder"
           options={{ headerShown: false, presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="notifications"
+          options={{ headerShown: false, presentation: "card" }}
+        />
+        <Stack.Screen
+          name="how-it-works"
+          options={{ headerShown: false, presentation: "card" }}
         />
       </Stack>
     </AuthGuard>
@@ -80,7 +102,9 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <AuthProvider>
-                <RootLayoutNav />
+                <NotificationsProvider>
+                  <RootLayoutNav />
+                </NotificationsProvider>
               </AuthProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>

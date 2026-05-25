@@ -5,6 +5,7 @@ import React, { useCallback, useState } from "react";
 import {
   FlatList,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,34 +16,41 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TalentCard } from "@/components/TalentCard";
 import { ProfileDrawer } from "@/components/ProfileDrawer";
-import { ALL_TALENT, type Talent } from "@/constants/data";
+import { ALL_TALENT, SA_PROVINCES, TALENT_CATEGORIES, type Talent } from "@/constants/data";
+import { useNotifications } from "@/context/NotificationsContext";
 import { useColors } from "@/hooks/useColors";
-
-const TYPE_FILTERS = [
-  { id: "all", label: "All Talent" },
-  { id: "model", label: "Models" },
-  { id: "artist", label: "Artists" },
-];
 
 const MODE_FILTERS = [
   { id: "trending", label: "Trending" },
   { id: "rising", label: "Rising" },
   { id: "campaignReady", label: "Campaign Ready" },
-  { id: "editorialPicks", label: "Editorial Picks" },
+  { id: "instantBook", label: "Instant Book" },
+  { id: "houseCalls", label: "House Calls" },
   { id: "newFaces", label: "New Faces" },
 ];
 
-function filterTalent(talent: Talent[], type: string, mode: string, search: string): Talent[] {
+function filterTalent(
+  talent: Talent[],
+  category: string,
+  mode: string,
+  province: string,
+  houseCallsOnly: boolean,
+  search: string
+): Talent[] {
   let result = [...talent];
 
-  if (type === "model") result = result.filter((t) => t.type === "model");
-  if (type === "artist") result = result.filter((t) => t.type === "artist");
+  if (province !== "all") result = result.filter((t) => t.province === province);
+  if (houseCallsOnly) result = result.filter((t) => t.settings.houseCallsEnabled);
+
+  if (category === "model") result = result.filter((t) => t.type === "model");
+  else if (category !== "all") result = result.filter((t) => t.artistCategory === category);
 
   if (mode === "trending") result = result.sort((a, b) => b.jobs - a.jobs);
-  if (mode === "rising") result = result.sort((a, b) => b.repScore - a.repScore).filter((t) => t.repScore < 90);
-  if (mode === "campaignReady") result = result.filter((t) => t.campaigns > 5 && t.available);
-  if (mode === "editorialPicks") result = result.filter((t) => t.badges.some((b) => b.includes("Editorial")));
-  if (mode === "newFaces") result = result.filter((t) => t.tier === "New" || t.tier === "Active");
+  else if (mode === "rising") result = result.sort((a, b) => b.repScore - a.repScore).filter((t) => t.repScore < 90);
+  else if (mode === "campaignReady") result = result.filter((t) => t.campaigns > 5 && t.available);
+  else if (mode === "instantBook") result = result.filter((t) => t.settings.instantBook);
+  else if (mode === "houseCalls") result = result.filter((t) => t.settings.houseCallsEnabled);
+  else if (mode === "newFaces") result = result.filter((t) => t.tier === "New" || t.tier === "Active");
 
   if (search.trim()) {
     const q = search.toLowerCase();
@@ -61,15 +69,19 @@ function filterTalent(talent: Talent[], type: string, mode: string, search: stri
 export default function DiscoverScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { unreadCount } = useNotifications();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState("trending");
+  const [province, setProvince] = useState("all");
+  const [houseCallsOnly, setHouseCallsOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const paddingTop = insets.top + (Platform.OS === "web" ? 67 : 0);
 
-  const talent = filterTalent(ALL_TALENT, typeFilter, modeFilter, search);
+  const talent = filterTalent(ALL_TALENT, categoryFilter, modeFilter, province, houseCallsOnly, search);
 
   const renderItem = useCallback(
     ({ item }: { item: Talent }) => (
@@ -84,67 +96,197 @@ export default function DiscoverScreen() {
     []
   );
 
+  const currentProvinceName = SA_PROVINCES.find((p) => p.id === province)?.label ?? "All Provinces";
+  const hasActiveFilters = province !== "all" || houseCallsOnly || categoryFilter !== "all";
+
   const ListHeader = (
     <View>
       {/* Hero stats bar */}
       <View style={[styles.statsBar, { backgroundColor: colors.warm, borderRadius: colors.radius, marginBottom: 16 }]}>
         <View style={styles.statItem}>
           <Text style={[styles.statNum, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>247</Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Jobs Created
-          </Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Jobs Created</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.statItem}>
           <Text style={[styles.statNum, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>R186K</Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Paid Out
-          </Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Paid Out</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statNum, { color: colors.purple, fontFamily: "Inter_700Bold" }]}>
-            {ALL_TALENT.length}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Talent
-          </Text>
+          <Text style={[styles.statNum, { color: colors.purple, fontFamily: "Inter_700Bold" }]}>{ALL_TALENT.length}</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Talent</Text>
+        </View>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.statItem}>
+          <Text style={[styles.statNum, { color: colors.blue, fontFamily: "Inter_700Bold" }]}>9</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Provinces</Text>
         </View>
       </View>
 
-      {/* Type filters */}
-      <View style={[styles.filterRow, { marginBottom: 10 }]}>
-        {TYPE_FILTERS.map((f) => (
+      {/* Filter expand panel */}
+      {filtersOpen && (
+        <View
+          style={[
+            styles.filterPanel,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              borderRadius: colors.radius,
+              marginBottom: 12,
+            },
+          ]}
+        >
+          {/* Province */}
+          <View style={styles.filterGroup}>
+            <Text style={[styles.filterGroupLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+              Province
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipRow}>
+              {SA_PROVINCES.map((p) => (
+                <TouchableOpacity
+                  key={p.id}
+                  onPress={() => { Haptics.selectionAsync(); setProvince(p.id); }}
+                  activeOpacity={0.75}
+                  style={[
+                    styles.filterChip,
+                    {
+                      backgroundColor: province === p.id ? colors.blue : "transparent",
+                      borderColor: province === p.id ? colors.blue : colors.border,
+                      borderRadius: 8,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      {
+                        color: province === p.id ? "#fff" : colors.foreground,
+                        fontFamily: province === p.id ? "Inter_600SemiBold" : "Inter_400Regular",
+                      },
+                    ]}
+                  >
+                    {p.id === "all" ? p.label : p.id}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Category */}
+          <View style={styles.filterGroup}>
+            <Text style={[styles.filterGroupLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+              Category
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipRow}>
+              {TALENT_CATEGORIES.map((c) => (
+                <TouchableOpacity
+                  key={c.id}
+                  onPress={() => { Haptics.selectionAsync(); setCategoryFilter(c.id); }}
+                  activeOpacity={0.75}
+                  style={[
+                    styles.filterChip,
+                    {
+                      backgroundColor: categoryFilter === c.id ? colors.primary : "transparent",
+                      borderColor: categoryFilter === c.id ? colors.primary : colors.border,
+                      borderRadius: 8,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      {
+                        color: categoryFilter === c.id ? "#fff" : colors.foreground,
+                        fontFamily: categoryFilter === c.id ? "Inter_600SemiBold" : "Inter_400Regular",
+                      },
+                    ]}
+                  >
+                    {c.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* House calls toggle */}
           <TouchableOpacity
-            key={f.id}
-            onPress={() => { Haptics.selectionAsync(); setTypeFilter(f.id); }}
-            activeOpacity={0.75}
+            onPress={() => { Haptics.selectionAsync(); setHouseCallsOnly((v) => !v); }}
+            activeOpacity={0.8}
             style={[
-              styles.filterChip,
+              styles.houseCallToggle,
               {
-                backgroundColor: typeFilter === f.id ? colors.primary : colors.card,
-                borderColor: typeFilter === f.id ? colors.primary : colors.border,
-                borderRadius: colors.radius,
+                backgroundColor: houseCallsOnly ? colors.greenDim : colors.background,
+                borderColor: houseCallsOnly ? colors.green + "40" : colors.border,
+                borderRadius: 8,
               },
             ]}
           >
-            <Text
-              style={[
-                styles.filterChipText,
-                {
-                  color: typeFilter === f.id ? "#fff" : colors.foreground,
-                  fontFamily: typeFilter === f.id ? "Inter_600SemiBold" : "Inter_400Regular",
-                },
-              ]}
-            >
-              {f.label}
-            </Text>
+            <View style={[styles.checkBox, { backgroundColor: houseCallsOnly ? colors.green : "transparent", borderColor: houseCallsOnly ? colors.green : colors.dim, borderRadius: 4 }]}>
+              {houseCallsOnly && <Feather name="check" size={10} color="#fff" />}
+            </View>
+            <View style={styles.houseCallInfo}>
+              <Text style={[styles.houseCallLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                House Calls Only
+              </Text>
+              <Text style={[styles.houseCallSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                Artists who travel to your location
+              </Text>
+            </View>
+            <Feather name="home" size={16} color={houseCallsOnly ? colors.green : colors.dim} />
           </TouchableOpacity>
-        ))}
-      </View>
 
-      {/* Mode filters horizontal scroll */}
-      <View style={[styles.modeScroll, { marginBottom: 16 }]}>
+          {hasActiveFilters && (
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.selectionAsync();
+                setProvince("all");
+                setCategoryFilter("all");
+                setHouseCallsOnly(false);
+              }}
+              style={styles.clearFiltersBtn}
+              activeOpacity={0.7}
+            >
+              <Feather name="x" size={12} color={colors.primary} />
+              <Text style={[styles.clearFiltersText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                Clear all filters
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Active filter pills */}
+      {hasActiveFilters && !filtersOpen && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.activePillRow, { marginBottom: 10 }]}>
+          {province !== "all" && (
+            <View style={[styles.activePill, { backgroundColor: colors.blueDim, borderColor: colors.blue + "30", borderRadius: 8 }]}>
+              <Feather name="map-pin" size={10} color={colors.blue} />
+              <Text style={[styles.activePillText, { color: colors.blue, fontFamily: "Inter_500Medium" }]}>
+                {province}
+              </Text>
+            </View>
+          )}
+          {categoryFilter !== "all" && (
+            <View style={[styles.activePill, { backgroundColor: colors.primaryDim, borderColor: colors.primary + "30", borderRadius: 8 }]}>
+              <Text style={[styles.activePillText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                {TALENT_CATEGORIES.find((c) => c.id === categoryFilter)?.label}
+              </Text>
+            </View>
+          )}
+          {houseCallsOnly && (
+            <View style={[styles.activePill, { backgroundColor: colors.greenDim, borderColor: colors.green + "30", borderRadius: 8 }]}>
+              <Feather name="home" size={10} color={colors.green} />
+              <Text style={[styles.activePillText, { color: colors.green, fontFamily: "Inter_500Medium" }]}>
+                House Calls
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
+
+      {/* Mode filters */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modeScroll, { marginBottom: 14 }]}>
         {MODE_FILTERS.map((m) => (
           <TouchableOpacity
             key={m.id}
@@ -153,12 +295,13 @@ export default function DiscoverScreen() {
             style={[
               styles.modeChip,
               {
-                backgroundColor: modeFilter === m.id ? colors.accentDim : "transparent",
                 borderBottomColor: modeFilter === m.id ? colors.accent : "transparent",
                 borderBottomWidth: 2,
               },
             ]}
           >
+            {m.id === "instantBook" && <Feather name="zap" size={10} color={modeFilter === m.id ? colors.accent : colors.dim} />}
+            {m.id === "houseCalls" && <Feather name="home" size={10} color={modeFilter === m.id ? colors.accent : colors.dim} />}
             <Text
               style={[
                 styles.modeChipText,
@@ -172,17 +315,18 @@ export default function DiscoverScreen() {
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       <Text style={[styles.resultCount, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
         {talent.length} {talent.length === 1 ? "result" : "results"}
+        {province !== "all" ? ` in ${SA_PROVINCES.find((p) => p.id === province)?.label.split(" — ")[0]}` : ""}
       </Text>
     </View>
   );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Top nav header */}
+      {/* Top nav */}
       <View
         style={[
           styles.header,
@@ -193,7 +337,7 @@ export default function DiscoverScreen() {
           },
         ]}
       >
-        <TouchableOpacity onPress={() => setDrawerOpen(true)} style={styles.menuBtn} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => setDrawerOpen(true)} style={styles.iconBtn} activeOpacity={0.7}>
           <Feather name="menu" size={22} color={colors.foreground} />
         </TouchableOpacity>
 
@@ -206,13 +350,60 @@ export default function DiscoverScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity
-          onPress={() => { Haptics.selectionAsync(); setSearchOpen((v) => !v); }}
-          style={styles.menuBtn}
-          activeOpacity={0.7}
-        >
-          <Feather name={searchOpen ? "x" : "search"} size={20} color={colors.foreground} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {/* How It Works */}
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); router.push("/how-it-works"); }}
+            style={styles.iconBtn}
+            activeOpacity={0.7}
+          >
+            <Feather name="info" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+
+          {/* Filter toggle */}
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); setFiltersOpen((v) => !v); }}
+            style={[
+              styles.iconBtn,
+              hasActiveFilters && { backgroundColor: colors.primaryDim, borderRadius: 8 },
+            ]}
+            activeOpacity={0.7}
+          >
+            <Feather
+              name="sliders"
+              size={18}
+              color={hasActiveFilters ? colors.primary : colors.foreground}
+            />
+            {hasActiveFilters && (
+              <View style={[styles.filterActiveDot, { backgroundColor: colors.primary }]} />
+            )}
+          </TouchableOpacity>
+
+          {/* Search */}
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); setSearchOpen((v) => !v); }}
+            style={styles.iconBtn}
+            activeOpacity={0.7}
+          >
+            <Feather name={searchOpen ? "x" : "search"} size={20} color={colors.foreground} />
+          </TouchableOpacity>
+
+          {/* Notifications bell */}
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); router.push("/notifications"); }}
+            style={[styles.iconBtn, styles.notifBtn]}
+            activeOpacity={0.7}
+          >
+            <Feather name="bell" size={20} color={colors.foreground} />
+            {unreadCount > 0 && (
+              <View style={[styles.notifBadge, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.notifBadgeText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search bar */}
@@ -225,7 +416,8 @@ export default function DiscoverScreen() {
               borderColor: colors.border,
               borderRadius: colors.radius,
               marginHorizontal: 16,
-              marginBottom: 8,
+              marginTop: 8,
+              marginBottom: 4,
             },
           ]}
         >
@@ -256,7 +448,6 @@ export default function DiscoverScreen() {
           { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 100 },
         ]}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={!!talent.length}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Feather name="users" size={32} color={colors.dim} />
@@ -264,8 +455,19 @@ export default function DiscoverScreen() {
               No talent found
             </Text>
             <Text style={[styles.emptySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Try adjusting your filters
+              {hasActiveFilters ? "Try adjusting your filters" : "Try a different search"}
             </Text>
+            {hasActiveFilters && (
+              <TouchableOpacity
+                onPress={() => { setProvince("all"); setCategoryFilter("all"); setHouseCallsOnly(false); }}
+                style={[styles.clearBtn, { borderColor: colors.border, borderRadius: colors.radius }]}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.clearBtnText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+                  Clear Filters
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -281,15 +483,30 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
-  menuBtn: { padding: 4 },
+  iconBtn: { padding: 4, position: "relative" },
   headerTitle: { flexDirection: "row", alignItems: "center", gap: 8 },
   logoMark: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
   logoMarkText: { fontSize: 14 },
   brandName: { fontSize: 18, letterSpacing: -0.5 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 4 },
+  filterActiveDot: { position: "absolute", top: 2, right: 2, width: 6, height: 6, borderRadius: 3 },
+  notifBtn: { position: "relative" },
+  notifBadge: {
+    position: "absolute",
+    top: -1,
+    right: -1,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  notifBadgeText: { fontSize: 9 },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -297,7 +514,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     borderWidth: 1,
-    marginTop: 8,
+    marginBottom: 4,
   },
   searchInput: { flex: 1, fontSize: 14 },
   list: { paddingHorizontal: 16, paddingTop: 16 },
@@ -305,21 +522,56 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     paddingVertical: 12,
     paddingHorizontal: 8,
+    marginBottom: 0,
   },
   statItem: { flex: 1, alignItems: "center", gap: 2 },
-  statNum: { fontSize: 16, letterSpacing: -0.3 },
-  statLabel: { fontSize: 9, textTransform: "uppercase" as const, letterSpacing: 0.5 },
+  statNum: { fontSize: 14, letterSpacing: -0.3 },
+  statLabel: { fontSize: 8, textTransform: "uppercase" as const, letterSpacing: 0.5 },
   statDivider: { width: 1, alignSelf: "stretch", marginVertical: 4 },
-  filterRow: { flexDirection: "row", gap: 8 },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1.5,
+
+  filterPanel: { padding: 14, borderWidth: 1, gap: 14 },
+  filterGroup: { gap: 8 },
+  filterGroupLabel: { fontSize: 10, textTransform: "uppercase" as const, letterSpacing: 1 },
+  filterChipRow: { gap: 6, paddingVertical: 2 },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1 },
+  filterChipText: { fontSize: 12 },
+  houseCallToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderWidth: 1,
   },
-  filterChipText: { fontSize: 13 },
-  modeScroll: { flexDirection: "row", gap: 0 },
+  checkBox: {
+    width: 18,
+    height: 18,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  houseCallInfo: { flex: 1, gap: 2 },
+  houseCallLabel: { fontSize: 13 },
+  houseCallSub: { fontSize: 11 },
+  clearFiltersBtn: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start" },
+  clearFiltersText: { fontSize: 12 },
+
+  activePillRow: { gap: 6 },
+  activePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+  },
+  activePillText: { fontSize: 11 },
+
+  modeScroll: { gap: 0 },
   modeChip: {
-    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
     paddingVertical: 8,
   },
   modeChipText: { fontSize: 12 },
@@ -327,4 +579,6 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: "center", paddingTop: 40, gap: 8 },
   emptyTitle: { fontSize: 16 },
   emptySub: { fontSize: 14 },
+  clearBtn: { paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, marginTop: 8 },
+  clearBtnText: { fontSize: 14 },
 });

@@ -40,6 +40,8 @@ export default function TalentDetailScreen() {
   const accentColor = isModel ? colors.purple : colors.primary;
   const tierColor = TIER_COLORS[talent.tier] ?? colors.mutedForeground;
 
+  const verifiedCount = Object.values(talent.verification).filter(Boolean).length;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Top nav */}
@@ -60,18 +62,11 @@ export default function TalentDetailScreen() {
           Profile
         </Text>
         <TouchableOpacity
-          onPress={() => {
-            Haptics.selectionAsync();
-            setSaved((v) => !v);
-          }}
+          onPress={() => { Haptics.selectionAsync(); setSaved((v) => !v); }}
           style={styles.backBtn}
           activeOpacity={0.7}
         >
-          <Feather
-            name={saved ? "bookmark" : "bookmark"}
-            size={20}
-            color={saved ? colors.primary : colors.mutedForeground}
-          />
+          <Feather name="bookmark" size={20} color={saved ? colors.primary : colors.mutedForeground} />
         </TouchableOpacity>
       </View>
 
@@ -79,7 +74,7 @@ export default function TalentDetailScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: paddingBottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Profile header */}
+        {/* Profile hero */}
         <View
           style={[
             styles.profileHero,
@@ -136,24 +131,24 @@ export default function TalentDetailScreen() {
                   },
                 ]}
               >
-                <View
-                  style={[
-                    styles.dot,
-                    { backgroundColor: talent.available ? colors.green : colors.dim },
-                  ]}
-                />
+                <View style={[styles.dot, { backgroundColor: talent.available ? colors.green : colors.dim }]} />
                 <Text
                   style={[
                     styles.badgeText,
-                    {
-                      color: talent.available ? colors.green : colors.mutedForeground,
-                      fontFamily: "Inter_500Medium",
-                    },
+                    { color: talent.available ? colors.green : colors.mutedForeground, fontFamily: "Inter_500Medium" },
                   ]}
                 >
                   {talent.available ? "Available" : "Booked"}
                 </Text>
               </View>
+              {talent.settings.instantBook && (
+                <View style={[styles.badge, { backgroundColor: colors.greenDim, borderColor: colors.green + "40" }]}>
+                  <Feather name="zap" size={9} color={colors.green} />
+                  <Text style={[styles.badgeText, { color: colors.green, fontFamily: "Inter_600SemiBold" }]}>
+                    Instant
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -168,68 +163,90 @@ export default function TalentDetailScreen() {
           ].map((s) => (
             <View
               key={s.label}
-              style={[
-                styles.statCard,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  borderRadius: colors.radius,
-                },
-              ]}
+              style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}
             >
               <Feather name={s.icon} size={14} color={s.color} />
-              <Text style={[styles.statValue, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                {s.value}
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {s.label}
-              </Text>
+              <Text style={[styles.statValue, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{s.value}</Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{s.label}</Text>
             </View>
           ))}
         </View>
 
-        {/* Rate */}
-        <View
-          style={[
-            styles.rateCard,
-            {
-              backgroundColor: colors.accentDim,
-              borderRadius: colors.radius,
-              borderColor: colors.accent + "30",
-              borderWidth: 1,
-            },
-          ]}
-        >
-          <Text style={[styles.rateLabel, { color: colors.accent, fontFamily: "Inter_400Regular" }]}>
-            Day Rate
-          </Text>
-          <Text style={[styles.rateValue, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>
-            {talent.rate}
-          </Text>
+        {/* Rate + house call info */}
+        <View style={[styles.rateCard, { backgroundColor: colors.accentDim, borderRadius: colors.radius, borderColor: colors.accent + "30", borderWidth: 1 }]}>
+          <View>
+            <Text style={[styles.rateLabel, { color: colors.accent, fontFamily: "Inter_400Regular" }]}>Day Rate</Text>
+            <Text style={[styles.rateValue, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>{talent.rate}</Text>
+          </View>
+          {talent.settings.houseCallsEnabled && (
+            <View style={[styles.houseCallBadge, { backgroundColor: colors.greenDim, borderRadius: 8, borderColor: colors.green + "30", borderWidth: 1 }]}>
+              <Feather name="home" size={12} color={colors.green} />
+              <View>
+                <Text style={[styles.houseCallTitle, { color: colors.green, fontFamily: "Inter_600SemiBold" }]}>
+                  House Calls
+                </Text>
+                <Text style={[styles.houseCallRate, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  +R{talent.settings.callOutBase} + R{talent.settings.callOutRate}/km
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
-        {/* Bio */}
+        {/* About */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-            About
-          </Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>About</Text>
           <Text style={[styles.bioText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
             {talent.bio}
           </Text>
           <View style={styles.metaRow}>
             <Feather name="map-pin" size={13} color={colors.mutedForeground} />
             <Text style={[styles.metaText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {talent.location}
+              {talent.location} · {talent.province}
             </Text>
+          </View>
+        </View>
+
+        {/* Verification */}
+        <View style={[styles.verifySection, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, borderWidth: 1 }]}>
+          <View style={styles.verifyHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              Verification
+            </Text>
+            <Text style={[styles.verifyCount, { color: colors.green, fontFamily: "Inter_600SemiBold" }]}>
+              {verifiedCount}/4
+            </Text>
+          </View>
+          <View style={styles.verifyGrid}>
+            {[
+              { label: "Identity", checked: talent.verification.identity },
+              { label: "Portfolio", checked: talent.verification.portfolio },
+              { label: "First Appt", checked: talent.verification.firstAppointment },
+              { label: "Skill Assessed", checked: talent.verification.skillAssessment },
+            ].map((v) => (
+              <View key={v.label} style={styles.verifyItem}>
+                <Feather
+                  name={v.checked ? "check-circle" : "circle"}
+                  size={15}
+                  color={v.checked ? colors.green : colors.dim}
+                />
+                <Text
+                  style={[
+                    styles.verifyLabel,
+                    { color: v.checked ? colors.foreground : colors.mutedForeground, fontFamily: v.checked ? "Inter_500Medium" : "Inter_400Regular" },
+                  ]}
+                >
+                  {v.label}
+                </Text>
+              </View>
+            ))}
           </View>
         </View>
 
         {/* Model stats */}
         {isModel && talent.modelStats && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              Model Stats
-            </Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Model Stats</Text>
             <View style={styles.modelStatsGrid}>
               {[
                 { label: "Height", value: talent.modelStats.height },
@@ -238,14 +255,7 @@ export default function TalentDetailScreen() {
               ].map((stat) => (
                 <View
                   key={stat.label}
-                  style={[
-                    styles.modelStat,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                      borderRadius: colors.radius,
-                    },
-                  ]}
+                  style={[styles.modelStat, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}
                 >
                   <Text style={[styles.modelStatLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
                     {stat.label}
@@ -258,16 +268,8 @@ export default function TalentDetailScreen() {
             </View>
             <View style={styles.aestheticRow}>
               {talent.modelStats.aesthetic.map((a) => (
-                <View
-                  key={a}
-                  style={[
-                    styles.aestheticPill,
-                    { backgroundColor: colors.purpleDim, borderColor: colors.purple + "30", borderRadius: 6 },
-                  ]}
-                >
-                  <Text style={[styles.aestheticText, { color: colors.purple, fontFamily: "Inter_500Medium" }]}>
-                    {a}
-                  </Text>
+                <View key={a} style={[styles.aestheticPill, { backgroundColor: colors.purpleDim, borderColor: colors.purple + "30", borderRadius: 6 }]}>
+                  <Text style={[styles.aestheticText, { color: colors.purple, fontFamily: "Inter_500Medium" }]}>{a}</Text>
                 </View>
               ))}
             </View>
@@ -276,26 +278,12 @@ export default function TalentDetailScreen() {
 
         {/* Badges */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-            Badges
-          </Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Badges</Text>
           <View style={styles.badgesWrap}>
             {talent.badges.map((b) => (
-              <View
-                key={b}
-                style={[
-                  styles.fullBadge,
-                  {
-                    backgroundColor: colors.primaryDim,
-                    borderColor: colors.primary + "30",
-                    borderRadius: 8,
-                  },
-                ]}
-              >
+              <View key={b} style={[styles.fullBadge, { backgroundColor: colors.primaryDim, borderColor: colors.primary + "30", borderRadius: 8 }]}>
                 <Feather name="award" size={12} color={colors.primary} />
-                <Text style={[styles.fullBadgeText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
-                  {b}
-                </Text>
+                <Text style={[styles.fullBadgeText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>{b}</Text>
               </View>
             ))}
           </View>
@@ -310,32 +298,16 @@ export default function TalentDetailScreen() {
             {talent.collaborations.map((c) => (
               <View
                 key={c.name}
-                style={[
-                  styles.collabItem,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                    borderRadius: colors.radius,
-                  },
-                ]}
+                style={[styles.collabItem, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}
               >
-                <View
-                  style={[
-                    styles.collabAvatar,
-                    { backgroundColor: colors.primaryDim, borderRadius: 10 },
-                  ]}
-                >
+                <View style={[styles.collabAvatar, { backgroundColor: colors.primaryDim, borderRadius: 10 }]}>
                   <Text style={[styles.collabAvatarText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
                     {c.name[0]}
                   </Text>
                 </View>
                 <View style={styles.collabInfo}>
-                  <Text style={[styles.collabName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                    {c.name}
-                  </Text>
-                  <Text style={[styles.collabRole, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    {c.role}
-                  </Text>
+                  <Text style={[styles.collabName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{c.name}</Text>
+                  <Text style={[styles.collabRole, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{c.role}</Text>
                 </View>
                 <View style={[styles.collabJobs, { backgroundColor: colors.muted, borderRadius: 6 }]}>
                   <Text style={[styles.collabJobsText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
@@ -373,6 +345,7 @@ export default function TalentDetailScreen() {
           onPress={() => {
             if (talent.available) {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.push(`/book/${talent.id}`);
             }
           }}
           activeOpacity={0.82}
@@ -381,23 +354,18 @@ export default function TalentDetailScreen() {
           <Text
             style={[
               styles.bookBtnText,
-              {
-                color: talent.available ? "#fff" : colors.mutedForeground,
-                fontFamily: "Inter_700Bold",
-              },
+              { color: talent.available ? "#fff" : colors.mutedForeground, fontFamily: "Inter_700Bold" },
             ]}
           >
-            {talent.available ? "Book Now" : "Currently Booked"}
+            {talent.available
+              ? talent.settings.instantBook
+                ? "⚡ Instant Book"
+                : "Book Now"
+              : "Currently Booked"}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[
-            styles.messageBtn,
-            {
-              borderColor: accentColor,
-              borderRadius: colors.radius,
-            },
-          ]}
+          style={[styles.messageBtn, { borderColor: accentColor, borderRadius: colors.radius }]}
           onPress={() => Haptics.selectionAsync()}
           activeOpacity={0.82}
         >
@@ -423,30 +391,17 @@ const styles = StyleSheet.create({
   navTitle: { fontSize: 16 },
   scroll: { padding: 16, gap: 14 },
   profileHero: { flexDirection: "row", gap: 16, padding: 16, alignItems: "center" },
-  heroAvatar: {
-    width: 72,
-    height: 72,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
+  heroAvatar: { width: 72, height: 72, alignItems: "center", justifyContent: "center", position: "relative" },
   heroAvatarText: { fontSize: 28 },
   verifiedBadge: {
-    position: "absolute",
-    bottom: -2,
-    right: -2,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
+    position: "absolute", bottom: -2, right: -2, width: 18, height: 18, borderRadius: 9,
+    borderWidth: 2, alignItems: "center", justifyContent: "center",
   },
   heroInfo: { flex: 1, gap: 3 },
   heroName: { fontSize: 18, letterSpacing: -0.4 },
   heroHandle: { fontSize: 13 },
   heroRole: { fontSize: 12, marginBottom: 4 },
-  heroBadges: { flexDirection: "row", gap: 6 },
+  heroBadges: { flexDirection: "row", gap: 6, flexWrap: "wrap" as const },
   badge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
   badgeText: { fontSize: 10 },
   dot: { width: 5, height: 5, borderRadius: 3 },
@@ -454,19 +409,23 @@ const styles = StyleSheet.create({
   statCard: { flex: 1, padding: 10, borderWidth: 1, alignItems: "center", gap: 4 },
   statValue: { fontSize: 18, letterSpacing: -0.4 },
   statLabel: { fontSize: 9, textTransform: "uppercase" as const, letterSpacing: 0.4, textAlign: "center" },
-  rateCard: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 14,
-  },
-  rateLabel: { fontSize: 12, textTransform: "uppercase" as const, letterSpacing: 0.8 },
+  rateCard: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 14, flexWrap: "wrap" as const, gap: 10 },
+  rateLabel: { fontSize: 10, textTransform: "uppercase" as const, letterSpacing: 0.8 },
   rateValue: { fontSize: 18, letterSpacing: -0.4 },
+  houseCallBadge: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10 },
+  houseCallTitle: { fontSize: 12 },
+  houseCallRate: { fontSize: 10 },
   section: { gap: 10 },
   sectionTitle: { fontSize: 15, letterSpacing: -0.3 },
   bioText: { fontSize: 13, lineHeight: 20 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   metaText: { fontSize: 12 },
+  verifySection: { padding: 14, gap: 12 },
+  verifyHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  verifyCount: { fontSize: 13 },
+  verifyGrid: { flexDirection: "row", flexWrap: "wrap" as const, gap: 10 },
+  verifyItem: { flexDirection: "row", alignItems: "center", gap: 6, width: "45%" as any },
+  verifyLabel: { fontSize: 12 },
   modelStatsGrid: { flexDirection: "row", gap: 8 },
   modelStat: { flex: 1, padding: 12, borderWidth: 1, gap: 4 },
   modelStatLabel: { fontSize: 10, textTransform: "uppercase" as const, letterSpacing: 0.5 },
@@ -475,14 +434,7 @@ const styles = StyleSheet.create({
   aestheticPill: { paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1 },
   aestheticText: { fontSize: 12 },
   badgesWrap: { flexDirection: "row", flexWrap: "wrap" as const, gap: 8 },
-  fullBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderWidth: 1,
-  },
+  fullBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1 },
   fullBadgeText: { fontSize: 12 },
   collabItem: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderWidth: 1 },
   collabAvatar: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
@@ -492,24 +444,8 @@ const styles = StyleSheet.create({
   collabRole: { fontSize: 12 },
   collabJobs: { paddingHorizontal: 8, paddingVertical: 4 },
   collabJobsText: { fontSize: 11 },
-  bottomBar: {
-    flexDirection: "row",
-    gap: 10,
-    borderTopWidth: 1,
-  },
-  bookBtn: {
-    height: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
+  bottomBar: { flexDirection: "row", gap: 10, borderTopWidth: 1 },
+  bookBtn: { height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   bookBtnText: { fontSize: 16 },
-  messageBtn: {
-    width: 52,
-    height: 52,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-  },
+  messageBtn: { width: 52, height: 52, alignItems: "center", justifyContent: "center", borderWidth: 1.5 },
 });
