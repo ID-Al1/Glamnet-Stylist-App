@@ -5,9 +5,36 @@ import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Platform, StyleSheet, Text, View, useColorScheme } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
+import { useMessaging } from "@/context/MessagingContext";
+
+function UnreadBadge({ count }: { count: number }) {
+  const colors = useColors();
+  if (count === 0) return null;
+  return (
+    <View
+      style={{
+        position: "absolute",
+        top: -4,
+        right: -6,
+        minWidth: 15,
+        height: 15,
+        borderRadius: 8,
+        backgroundColor: colors.primary,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: 3,
+        zIndex: 10,
+      }}
+    >
+      <Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" }}>
+        {count > 9 ? "9+" : count}
+      </Text>
+    </View>
+  );
+}
 
 function NativeTabLayout() {
   return (
@@ -24,6 +51,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "banknote", selected: "banknote.fill" }} />
         <Label>Earn</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="messages">
+        <Icon sf={{ default: "message", selected: "message.fill" }} />
+        <Label>Messages</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="dashboard">
         <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
         <Label>Dashboard</Label>
@@ -35,6 +66,7 @@ function NativeTabLayout() {
 function ClassicTabLayout() {
   const colors = useColors();
   const colorScheme = useColorScheme();
+  const { totalUnread } = useMessaging();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
@@ -110,6 +142,22 @@ function ClassicTabLayout() {
             ) : (
               <Feather name="dollar-sign" size={20} color={color} />
             ),
+        }}
+      />
+      <Tabs.Screen
+        name="messages"
+        options={{
+          title: "Messages",
+          tabBarIcon: ({ color }) => (
+            <View style={{ position: "relative" }}>
+              {isIOS ? (
+                <SymbolView name="message" tintColor={color} size={22} />
+              ) : (
+                <Feather name="message-circle" size={20} color={color} />
+              )}
+              <UnreadBadge count={totalUnread} />
+            </View>
+          ),
         }}
       />
       <Tabs.Screen

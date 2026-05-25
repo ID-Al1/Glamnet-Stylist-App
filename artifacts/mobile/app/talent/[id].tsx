@@ -14,12 +14,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ALL_TALENT, TIER_COLORS } from "@/constants/data";
 import { useColors } from "@/hooks/useColors";
+import { useMessaging } from "@/context/MessagingContext";
 
 export default function TalentDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [saved, setSaved] = useState(false);
+  const { getOrCreateThread } = useMessaging();
 
   const talent = ALL_TALENT.find((t) => t.id === id);
 
@@ -39,8 +41,19 @@ export default function TalentDetailScreen() {
   const isModel = talent.type === "model";
   const accentColor = isModel ? colors.purple : colors.primary;
   const tierColor = TIER_COLORS[talent.tier] ?? colors.mutedForeground;
-
   const verifiedCount = Object.values(talent.verification).filter(Boolean).length;
+
+  const handleMessage = () => {
+    Haptics.selectionAsync();
+    const threadId = getOrCreateThread(
+      talent.id,
+      talent.name,
+      talent.role,
+      talent.handle,
+      talent.type
+    );
+    router.push(`/messages/${threadId}`);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -365,8 +378,8 @@ export default function TalentDetailScreen() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.messageBtn, { borderColor: accentColor, borderRadius: colors.radius }]}
-          onPress={() => Haptics.selectionAsync()}
+          style={[styles.messageBtn, { borderColor: accentColor, borderRadius: colors.radius, backgroundColor: accentColor + "10" }]}
+          onPress={handleMessage}
           activeOpacity={0.82}
         >
           <Feather name="message-circle" size={18} color={accentColor} />
