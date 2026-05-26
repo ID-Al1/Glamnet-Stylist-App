@@ -40,7 +40,7 @@ function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "sparkles", selected: "sparkles.fill" }} />
+        <Icon sf={{ default: "sparkles", selected: "sparkles" }} />
         <Label>Discover</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="teams">

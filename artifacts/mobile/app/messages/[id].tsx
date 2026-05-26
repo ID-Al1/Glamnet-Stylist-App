@@ -64,7 +64,7 @@ export default function ChatScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { threads, messages, sendMessage, markThreadRead } = useMessaging();
+  const { threads, messages, sendMessage, receiveMessage, markThreadRead } = useMessaging();
   const [input, setInput] = useState("");
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const listRef = useRef<FlatList>(null);
@@ -114,12 +114,12 @@ export default function ChatScreen() {
     setInput("");
     setShowQuickReplies(false);
 
-    // Simulate reply after a delay
+    // Simulate incoming reply after a delay — use receiveMessage so it appears on the correct side
     const delay = 1500 + Math.random() * 2000;
     setTimeout(() => {
       const replies = AUTO_REPLIES.default;
       const reply = replies[Math.floor(Math.random() * replies.length)];
-      sendMessage(id!, `[${thread.participantName.split(" ")[0]}]: ${reply}`);
+      receiveMessage(id!, thread.participantId, reply);
     }, delay);
   };
 
@@ -165,10 +165,7 @@ export default function ChatScreen() {
 
     const { msg } = item;
     const isMe = msg.senderId === "me";
-    // Strip auto-reply prefix if present
-    const displayText = msg.text.startsWith(`[${thread.participantName.split(" ")[0]}]: `)
-      ? msg.text.replace(`[${thread.participantName.split(" ")[0]}]: `, "")
-      : msg.text;
+    const displayText = msg.text;
 
     return (
       <View

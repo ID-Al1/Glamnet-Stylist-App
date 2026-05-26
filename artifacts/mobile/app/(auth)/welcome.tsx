@@ -45,7 +45,7 @@ export default function WelcomeScreen() {
           style={[
             styles.imageOverlay,
             {
-              background: undefined,
+              backgroundColor: undefined,
             },
           ]}
         >

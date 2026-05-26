@@ -94,6 +94,14 @@ function RootLayoutNav() {
           name="post-job"
           options={{ headerShown: false, presentation: "modal" }}
         />
+        <Stack.Screen
+          name="my-castings"
+          options={{ headerShown: false, presentation: "card" }}
+        />
+        <Stack.Screen
+          name="my-castings/[id]"
+          options={{ headerShown: false, presentation: "card" }}
+        />
       </Stack>
     </AuthGuard>
   );
