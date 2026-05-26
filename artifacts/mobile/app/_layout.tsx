@@ -18,6 +18,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { NotificationsProvider } from "@/context/NotificationsContext";
 import { MessagingProvider } from "@/context/MessagingContext";
+import { SettingsProvider } from "@/context/SettingsContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -79,6 +80,10 @@ function RootLayoutNav() {
           name="how-it-works"
           options={{ headerShown: false, presentation: "card" }}
         />
+        <Stack.Screen
+          name="settings"
+          options={{ headerShown: false, presentation: "card" }}
+        />
       </Stack>
     </AuthGuard>
   );
@@ -107,11 +112,13 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <AuthProvider>
-                <NotificationsProvider>
-                  <MessagingProvider>
-                    <RootLayoutNav />
-                  </MessagingProvider>
-                </NotificationsProvider>
+                <SettingsProvider>
+                  <NotificationsProvider>
+                    <MessagingProvider>
+                      <RootLayoutNav />
+                    </MessagingProvider>
+                  </NotificationsProvider>
+                </SettingsProvider>
               </AuthProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>

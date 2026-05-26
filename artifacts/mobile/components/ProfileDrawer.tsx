@@ -181,10 +181,10 @@ export function ProfileDrawer({ visible, onClose }: ProfileDrawerProps) {
         {/* Nav items */}
         <View style={styles.navItems}>
           {[
-            { icon: "user" as const, label: "My Profile", sub: "View and edit your profile" },
-            { icon: "settings" as const, label: "Settings", sub: "Account & preferences" },
-            { icon: "help-circle" as const, label: "Help & Support", sub: "Get assistance" },
-            { icon: "star" as const, label: "Rate the App", sub: "Share your feedback" },
+            { icon: "user" as const, label: "My Profile", sub: "View and edit your profile", route: null },
+            { icon: "settings" as const, label: "Settings", sub: "Account & preferences", route: "/settings" as const },
+            { icon: "help-circle" as const, label: "How It Works", sub: "Verification, tiers, rep scores", route: "/how-it-works" as const },
+            { icon: "star" as const, label: "Rate the App", sub: "Share your feedback", route: null },
           ].map((item) => (
             <TouchableOpacity
               key={item.label}
@@ -193,6 +193,7 @@ export function ProfileDrawer({ visible, onClose }: ProfileDrawerProps) {
               onPress={() => {
                 Haptics.selectionAsync();
                 onClose();
+                if (item.route) router.push(item.route as any);
               }}
             >
               <View style={[styles.navIconWrap, { backgroundColor: colors.muted, borderRadius: 10 }]}>

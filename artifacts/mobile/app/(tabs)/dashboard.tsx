@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { router } from "expo-router";
 import { ProfileDrawer } from "@/components/ProfileDrawer";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -45,7 +46,11 @@ export default function DashboardScreen() {
         <Text style={[styles.screenTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
           Dashboard
         </Text>
-        <TouchableOpacity style={styles.menuBtn} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.menuBtn}
+          activeOpacity={0.7}
+          onPress={() => { Haptics.selectionAsync(); router.push("/settings"); }}
+        >
           <Feather name="settings" size={20} color={colors.foreground} />
         </TouchableOpacity>
       </View>
