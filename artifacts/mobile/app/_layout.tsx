@@ -20,6 +20,7 @@ import { NotificationsProvider } from "@/context/NotificationsContext";
 import { MessagingProvider } from "@/context/MessagingContext";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { ApplicationsProvider } from "@/context/ApplicationsContext";
+import { PostingsProvider } from "@/context/PostingsContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -89,6 +90,10 @@ function RootLayoutNav() {
           name="jobs/[id]"
           options={{ headerShown: false, presentation: "card" }}
         />
+        <Stack.Screen
+          name="post-job"
+          options={{ headerShown: false, presentation: "modal" }}
+        />
       </Stack>
     </AuthGuard>
   );
@@ -118,13 +123,15 @@ export default function RootLayout() {
             <KeyboardProvider>
               <AuthProvider>
                 <SettingsProvider>
-                  <ApplicationsProvider>
-                    <NotificationsProvider>
-                      <MessagingProvider>
-                        <RootLayoutNav />
-                      </MessagingProvider>
-                    </NotificationsProvider>
-                  </ApplicationsProvider>
+                  <PostingsProvider>
+                    <ApplicationsProvider>
+                      <NotificationsProvider>
+                        <MessagingProvider>
+                          <RootLayoutNav />
+                        </MessagingProvider>
+                      </NotificationsProvider>
+                    </ApplicationsProvider>
+                  </PostingsProvider>
                 </SettingsProvider>
               </AuthProvider>
             </KeyboardProvider>

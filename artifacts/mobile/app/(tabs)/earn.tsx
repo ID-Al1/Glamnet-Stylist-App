@@ -18,6 +18,7 @@ import { ProfileDrawer } from "@/components/ProfileDrawer";
 import { JOB_BOARD, JOB_TYPES, type Job } from "@/constants/jobs";
 import { SA_PROVINCES } from "@/constants/data";
 import { useApplications } from "@/context/ApplicationsContext";
+import { usePostings } from "@/context/PostingsContext";
 import { useColors } from "@/hooks/useColors";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -29,7 +30,7 @@ const TYPE_COLORS: Record<string, string> = {
   "Social Media": "#C4526E",
 };
 
-function JobCard({ job, applied }: { job: Job; applied: boolean }) {
+function JobCard({ job, applied, isMyListing, onDelete }: { job: Job; applied: boolean; isMyListing?: boolean; onDelete?: () => void }) {
   const colors = useColors();
   const typeColor = TYPE_COLORS[job.type] ?? colors.primary;
   const spotsLeft = job.spotsTotal - job.spotsFilled;
@@ -71,6 +72,12 @@ function JobCard({ job, applied }: { job: Job; applied: boolean }) {
             <View style={[styles.badge, { backgroundColor: colors.greenDim, borderRadius: 6, borderColor: colors.green + "40", borderWidth: 1 }]}>
               <Feather name="check-circle" size={9} color={colors.green} />
               <Text style={[styles.badgeText, { color: colors.green, fontFamily: "Inter_600SemiBold" }]}>Applied</Text>
+            </View>
+          )}
+          {isMyListing && (
+            <View style={[styles.badge, { backgroundColor: colors.purpleDim, borderRadius: 6, borderColor: colors.purple + "40", borderWidth: 1 }]}>
+              <Feather name="briefcase" size={9} color={colors.purple} />
+              <Text style={[styles.badgeText, { color: colors.purple, fontFamily: "Inter_600SemiBold" }]}>Your Listing</Text>
             </View>
           )}
         </View>
@@ -126,6 +133,17 @@ function JobCard({ job, applied }: { job: Job; applied: boolean }) {
         <Text style={[styles.deadlineText, { color: colors.dim, fontFamily: "Inter_400Regular" }]}>
           Apply by {job.deadline} · Posted {job.posted}
         </Text>
+        {isMyListing && onDelete && (
+          <TouchableOpacity
+            onPress={(e) => { e.stopPropagation?.(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); onDelete(); }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.deleteBtn}
+            activeOpacity={0.75}
+          >
+            <Feather name="trash-2" size={11} color={colors.primary} />
+            <Text style={[styles.deleteText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>Remove</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -135,6 +153,7 @@ export default function EarnScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { hasApplied, totalApplied } = useApplications();
+  const { myPostings, removePosting } = usePostings();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"jobs" | "referrals" | "payments">("jobs");
   const [search, setSearch] = useState("");
@@ -145,8 +164,11 @@ export default function EarnScreen() {
 
   const paddingTop = insets.top + (Platform.OS === "web" ? 67 : 0);
 
+  const allJobs = useMemo(() => [...myPostings, ...JOB_BOARD], [myPostings]);
+  const myPostingIds = useMemo(() => new Set(myPostings.map((p) => p.id)), [myPostings]);
+
   const filteredJobs = useMemo(() => {
-    let jobs = [...JOB_BOARD];
+    let jobs = [...allJobs];
     if (search.trim()) {
       const q = search.toLowerCase();
       jobs = jobs.filter(
@@ -165,7 +187,7 @@ export default function EarnScreen() {
     else jobs.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
 
     return jobs;
-  }, [search, selectedType, selectedProvince, sortBy]);
+  }, [allJobs, search, selectedType, selectedProvince, sortBy]);
 
   const activeFilterCount =
     (selectedType !== "all" ? 1 : 0) + (selectedProvince !== "all" ? 1 : 0);
@@ -341,10 +363,35 @@ export default function EarnScreen() {
             }
             renderItem={({ item }) => (
               <View style={styles.cardWrap}>
-                <JobCard job={item} applied={hasApplied(item.id)} />
+                <JobCard
+                  job={item}
+                  applied={hasApplied(item.id)}
+                  isMyListing={myPostingIds.has(item.id)}
+                  onDelete={myPostingIds.has(item.id) ? () => removePosting(item.id) : undefined}
+                />
               </View>
             )}
           />
+
+          {/* Post a Casting FAB */}
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); router.push("/post-job"); }}
+            style={[
+              styles.fab,
+              {
+                backgroundColor: colors.primary,
+                borderRadius: 28,
+                shadowColor: colors.primary,
+                bottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 90,
+              },
+            ]}
+            activeOpacity={0.85}
+          >
+            <Feather name="plus" size={18} color="#fff" />
+            <Text style={[styles.fabText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+              Post a Casting
+            </Text>
+          </TouchableOpacity>
         </>
       )}
 
@@ -469,12 +516,28 @@ const styles = StyleSheet.create({
   roleTagText: { fontSize: 10 },
   jobRate: { fontSize: 14, letterSpacing: -0.3 },
   deadlineRow: { flexDirection: "row", alignItems: "center", gap: 5, borderTopWidth: 1, paddingTop: 8 },
-  deadlineText: { fontSize: 10 },
+  deadlineText: { fontSize: 10, flex: 1 },
+  deleteBtn: { flexDirection: "row", alignItems: "center", gap: 3 },
+  deleteText: { fontSize: 10 },
   emptyState: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyTitle: { fontSize: 16 },
   emptySub: { fontSize: 13, textAlign: "center", paddingHorizontal: 24 },
   clearAllBtn: { paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, marginTop: 8 },
   clearAllText: { fontSize: 13 },
+  fab: {
+    position: "absolute",
+    right: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  fabText: { fontSize: 14 },
   referralCard: { padding: 24, alignItems: "center", gap: 12, marginBottom: 16 },
   referralTitle: { fontSize: 18, textAlign: "center" },
   referralSub: { fontSize: 13, textAlign: "center", lineHeight: 18, paddingHorizontal: 8 },
