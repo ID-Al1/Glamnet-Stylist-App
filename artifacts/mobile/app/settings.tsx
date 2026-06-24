@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   Alert,
   Platform,
@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SA_PROVINCES } from "@/constants/data";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/context/SettingsContext";
+import { apiFetch } from "@/lib/api";
 import { useColors } from "@/hooks/useColors";
 
 function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
@@ -177,8 +178,67 @@ function NumberInput({
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, signOut } = useAuth();
+  const { user, signOut, updateUser } = useAuth();
   const { settings, setArtist, setNotification, setPrivacy, resetSettings } = useSettings();
+  const [togglingAvailability, setTogglingAvailability] = useState(false);
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const syncProfile = useCallback(
+    (patch: Record<string, unknown>, immediate = false) => {
+      if (syncTimer.current) clearTimeout(syncTimer.current);
+      const doSync = async () => {
+        try {
+          const { user: updated } = await apiFetch<{ user: typeof user }>("/auth/me/profile", {
+            method: "PATCH",
+            body: patch,
+          });
+          if (updated) updateUser(updated as any);
+        } catch {
+          // silent — local state is already updated
+        }
+      };
+      if (immediate) {
+        doSync();
+      } else {
+        syncTimer.current = setTimeout(doSync, 800);
+      }
+    },
+    [updateUser]
+  );
+
+  const handleAvailabilityToggle = async (v: boolean) => {
+    if (togglingAvailability) return;
+    setTogglingAvailability(true);
+    try {
+      await apiFetch("/auth/me/availability", { method: "PATCH", body: { available: v } });
+      updateUser({ available: v });
+    } catch {
+      // revert is automatic — user.available stays unchanged
+    } finally {
+      setTogglingAvailability(false);
+    }
+  };
+
+  const handleArtistToggle = (key: "instantBook" | "houseCallsEnabled" | "studioAvailable", v: boolean) => {
+    setArtist(key, v);
+    syncProfile({ [key]: v }, true);
+  };
+
+  const handleArtistNumber = (key: "dayRate" | "halfDayRate" | "callOutBase" | "callOutRate", v: number) => {
+    setArtist(key, v);
+    syncProfile({ [key]: v });
+  };
+
+  const handleProvinceChange = (province: string) => {
+    setArtist("province", province);
+    syncProfile({ province }, true);
+  };
+
+  const handleCityChange = (city: string) => {
+    setArtist("city", city);
+    syncProfile({ city });
+  };
+
   const [showProvinces, setShowProvinces] = useState(false);
 
   const paddingTop = insets.top + (Platform.OS === "web" ? 67 : 0);
@@ -213,7 +273,7 @@ export default function SettingsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
           Settings
         </Text>
         <View style={{ width: 30 }} />
@@ -253,10 +313,20 @@ export default function SettingsScreen() {
             <Text style={[styles.profileHandle, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
               {user?.handle ?? "@handle"}
             </Text>
-            <View style={[styles.profileRoleBadge, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "40", borderRadius: 6 }]}>
-              <Text style={[styles.profileRoleText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                {user?.role === "stylist" ? "Artist / Stylist" : "Client"} · {user?.tier ?? "New"}
-              </Text>
+            <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" as const }}>
+              <View style={[styles.profileRoleBadge, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "40", borderRadius: 6 }]}>
+                <Text style={[styles.profileRoleText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                  {user?.role === "stylist" ? "Artist / Stylist" : "Client"} · {user?.tier ?? "New"}
+                </Text>
+              </View>
+              {user?.foundingMember && (
+                <View style={[styles.profileRoleBadge, { backgroundColor: colors.gold + "18", borderColor: colors.gold + "50", borderRadius: 6, flexDirection: "row", alignItems: "center", gap: 4 }]}>
+                  <Feather name="award" size={10} color={colors.gold} />
+                  <Text style={[styles.profileRoleText, { color: colors.gold, fontFamily: "Inter_700Bold" }]}>
+                    Founding Member
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -270,20 +340,46 @@ export default function SettingsScreen() {
           <ToggleRow
             icon="clock"
             label="Available for Bookings"
-            sublabel={a.available ? "Visible to clients — you can receive bookings" : "Hidden from discovery — not accepting work"}
-            iconColor={a.available ? colors.green : colors.dim}
-            value={a.available}
-            onChange={(v) => setArtist("available", v)}
+            sublabel={user?.available ? "Visible to clients — you can receive bookings" : "Hidden from discovery — not accepting work"}
+            iconColor={user?.available ? colors.green : colors.dim}
+            value={user?.available ?? false}
+            onChange={handleAvailabilityToggle}
           />
           <ToggleRow
             icon="zap"
             label="Instant Book"
             sublabel="Allow clients to book you directly without approval"
             iconColor={colors.accent}
-            value={a.instantBook}
-            onChange={(v) => setArtist("instantBook", v)}
+            value={user?.instantBook ?? a.instantBook}
+            onChange={(v) => handleArtistToggle("instantBook", v)}
           />
         </View>
+
+        {/* ── MY RATES (stylist only) ── */}
+        {user?.role === "stylist" && (
+          <>
+            <SectionHeader
+              title="My Rates"
+              subtitle="Set the prices shown on your profile. Clients see these before booking you."
+            />
+            <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <NumberInput
+                label="Full day rate"
+                value={user?.dayRate ?? a.dayRate}
+                onChange={(v) => handleArtistNumber("dayRate", v)}
+                prefix="R"
+                suffix="/day"
+              />
+              <NumberInput
+                label="Half day rate"
+                value={user?.halfDayRate ?? a.halfDayRate}
+                onChange={(v) => handleArtistNumber("halfDayRate", v)}
+                prefix="R"
+                suffix="/half day"
+              />
+            </View>
+          </>
+        )}
 
         {/* ── HOUSE CALLS ── */}
         <SectionHeader
@@ -296,8 +392,8 @@ export default function SettingsScreen() {
             label="House Calls Enabled"
             sublabel="Show a house call option on your profile"
             iconColor={colors.primary}
-            value={a.houseCallsEnabled}
-            onChange={(v) => setArtist("houseCallsEnabled", v)}
+            value={user?.houseCallsEnabled ?? a.houseCallsEnabled}
+            onChange={(v) => handleArtistToggle("houseCallsEnabled", v)}
           />
 
           {a.houseCallsEnabled && (
@@ -305,27 +401,38 @@ export default function SettingsScreen() {
               <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />
               <NumberInput
                 label="Base call-out fee"
-                value={a.callOutBase}
-                onChange={(v) => setArtist("callOutBase", v)}
+                value={user?.callOutBase ?? a.callOutBase}
+                onChange={(v) => handleArtistNumber("callOutBase", v)}
                 prefix="R"
               />
               <NumberInput
                 label="Rate per km"
-                value={a.callOutRate}
-                onChange={(v) => setArtist("callOutRate", v)}
+                value={user?.callOutRate ?? a.callOutRate}
+                onChange={(v) => handleArtistNumber("callOutRate", v)}
                 prefix="R"
                 suffix="/km"
               />
-              <View style={[styles.callOutPreview, { backgroundColor: colors.accentDim, borderRadius: colors.radius }]}>
-                <Feather name="info" size={13} color={colors.accent} />
-                <Text style={[styles.callOutPreviewText, { color: colors.accent, fontFamily: "Inter_400Regular" }]}>
-                  A 10 km trip would cost the client{" "}
-                  <Text style={{ fontFamily: "Inter_700Bold" }}>
-                    R{(a.callOutBase + a.callOutRate * 10).toLocaleString()}
-                  </Text>{" "}
-                  on top of your day rate.
-                </Text>
-              </View>
+              {(() => {
+                const base = user?.callOutBase ?? a.callOutBase;
+                const rate = user?.callOutRate ?? a.callOutRate;
+                const day = user?.dayRate ?? a.dayRate;
+                return (
+                  <View style={[styles.callOutPreview, { backgroundColor: colors.accentDim, borderRadius: colors.radius }]}>
+                    <Feather name="info" size={13} color={colors.accent} />
+                    <Text style={[styles.callOutPreviewText, { color: colors.accent, fontFamily: "Inter_400Regular" }]}>
+                      A 10 km trip adds{" "}
+                      <Text style={{ fontFamily: "Inter_700Bold" }}>
+                        R{(base + rate * 10).toLocaleString()}
+                      </Text>
+                      {day > 0 ? (
+                        <Text> to your R{day.toLocaleString()}/day rate (total R{(day + base + rate * 10).toLocaleString()}).</Text>
+                      ) : (
+                        <Text> on top of your day rate.</Text>
+                      )}
+                    </Text>
+                  </View>
+                );
+              })()}
             </>
           )}
 
@@ -334,8 +441,8 @@ export default function SettingsScreen() {
             label="Studio Available"
             sublabel="Clients can come to your studio or workspace"
             iconColor={colors.purple}
-            value={a.studioAvailable}
-            onChange={(v) => setArtist("studioAvailable", v)}
+            value={user?.studioAvailable ?? a.studioAvailable}
+            onChange={(v) => handleArtistToggle("studioAvailable", v)}
           />
         </View>
 
@@ -348,13 +455,13 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="map-pin"
             label="Province"
-            sublabel={SA_PROVINCES.find((p) => p.id === a.province)?.label ?? a.province}
+            sublabel={SA_PROVINCES.find((p) => p.id === (user?.province ?? a.province))?.label ?? (user?.province ?? a.province)}
             iconColor={colors.primary}
             onPress={() => { Haptics.selectionAsync(); setShowProvinces((v) => !v); }}
             right={
               <View style={styles.provinceRight}>
                 <Text style={[styles.provinceValue, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                  {a.province}
+                  {user?.province ?? a.province}
                 </Text>
                 <Feather
                   name={showProvinces ? "chevron-up" : "chevron-down"}
@@ -366,39 +473,42 @@ export default function SettingsScreen() {
           />
           {showProvinces && (
             <View style={[styles.provinceList, { borderTopColor: colors.borderLight }]}>
-              {SA_PROVINCES.filter((p) => p.id !== "all").map((p) => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={[
-                    styles.provinceItem,
-                    {
-                      backgroundColor: a.province === p.id ? colors.primaryDim : "transparent",
-                      borderRadius: 8,
-                    },
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setArtist("province", p.id);
-                    setShowProvinces(false);
-                  }}
-                  activeOpacity={0.75}
-                >
-                  <Text
+              {SA_PROVINCES.filter((p) => p.id !== "all").map((p) => {
+                const activeProvince = user?.province ?? a.province;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
                     style={[
-                      styles.provinceItemText,
+                      styles.provinceItem,
                       {
-                        color: a.province === p.id ? colors.primary : colors.foreground,
-                        fontFamily: a.province === p.id ? "Inter_600SemiBold" : "Inter_400Regular",
+                        backgroundColor: activeProvince === p.id ? colors.primaryDim : "transparent",
+                        borderRadius: 8,
                       },
                     ]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      handleProvinceChange(p.id);
+                      setShowProvinces(false);
+                    }}
+                    activeOpacity={0.75}
                   >
-                    {p.label}
-                  </Text>
-                  {a.province === p.id && (
-                    <Feather name="check" size={14} color={colors.primary} />
-                  )}
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.provinceItemText,
+                        {
+                          color: activeProvince === p.id ? colors.primary : colors.foreground,
+                          fontFamily: activeProvince === p.id ? "Inter_600SemiBold" : "Inter_400Regular",
+                        },
+                      ]}
+                    >
+                      {p.label}
+                    </Text>
+                    {activeProvince === p.id && (
+                      <Feather name="check" size={14} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
 
@@ -411,8 +521,8 @@ export default function SettingsScreen() {
                 City / Area
               </Text>
               <TextInput
-                value={a.city}
-                onChangeText={(t) => setArtist("city", t)}
+                value={user?.city ?? a.city}
+                onChangeText={handleCityChange}
                 placeholder="e.g. Sandton, Cape Town CBD"
                 placeholderTextColor={colors.dim}
                 style={[styles.cityInput, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}

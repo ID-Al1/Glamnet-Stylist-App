@@ -47,3 +47,14 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Environment / secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Claude Code internal files
+project-glamnet.md
+write_memory.ps1
+claude_install_output*.txt
+claude_npm_files.txt

@@ -16,6 +16,8 @@ export interface ArtistProfileSettings {
   studioAvailable: boolean;
   province: string;
   city: string;
+  dayRate: number;
+  halfDayRate: number;
 }
 
 export interface NotificationSettings {
@@ -51,6 +53,8 @@ const DEFAULT: AppSettings = {
     studioAvailable: true,
     province: "GP",
     city: "Johannesburg",
+    dayRate: 0,
+    halfDayRate: 0,
   },
   notifications: {
     jobMatches: true,

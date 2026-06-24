@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   StyleSheet,
@@ -13,137 +14,105 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ProfileDrawer } from "@/components/ProfileDrawer";
-import { ALL_TALENT } from "@/constants/data";
+import { useTeams, type Team } from "@/context/TeamsContext";
 import { useColors } from "@/hooks/useColors";
 
-interface Team {
-  id: string;
-  name: string;
-  desc: string;
-  rate: string;
-  members: string[];
-  tags: string[];
-  active: boolean;
+function initials(name: string) {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
 }
 
-const SAMPLE_TEAMS: Team[] = [
-  {
-    id: "t1",
-    name: "Editorial Collective SA",
-    desc: "Premium editorial team for luxury campaigns",
-    rate: "R18,000/day",
-    members: ["a1", "a4", "m1", "a6"],
-    tags: ["Editorial", "Luxury", "Campaign"],
-    active: true,
-  },
-  {
-    id: "t2",
-    name: "Natural Beauty Squad",
-    desc: "Celebrating natural textures and authentic beauty",
-    rate: "R12,500/day",
-    members: ["a4", "a2", "m3", "a5"],
-    tags: ["Natural", "Lifestyle", "Events"],
-    active: true,
-  },
-  {
-    id: "t3",
-    name: "Runway Ready Crew",
-    desc: "High-fashion runway specialists",
-    rate: "R22,000/day",
-    members: ["m2", "a1", "a7", "a6"],
-    tags: ["Runway", "Fashion Week", "High Fashion"],
-    active: false,
-  },
-];
+function TeamCard({ team, colors }: { team: Team; colors: ReturnType<typeof useColors> }) {
+  return (
+    <TouchableOpacity
+      onPress={() => { Haptics.selectionAsync(); router.push(`/team/${team.id}` as any); }}
+      activeOpacity={0.82}
+      style={[styles.teamCard, { borderColor: colors.border, backgroundColor: colors.card, borderRadius: colors.radius }]}
+    >
+      <View style={styles.teamHeader}>
+        <View style={styles.teamTitleBlock}>
+          <Text style={[styles.teamName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+            {team.name}
+          </Text>
+          {team.description ? (
+            <Text style={[styles.teamDesc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={2}>
+              {team.description}
+            </Text>
+          ) : null}
+        </View>
+        <View style={[styles.statusDot, { backgroundColor: team.isPublic ? colors.sage : colors.dim }]} />
+      </View>
+
+      {team.members.length > 0 && (
+        <View style={styles.membersRow}>
+          {team.members.slice(0, 4).map((m, i) => (
+            <View
+              key={m.id}
+              style={[
+                styles.memberAvatar,
+                {
+                  backgroundColor: colors.muted,
+                  borderColor: colors.background,
+                  borderRadius: 16,
+                  marginLeft: i > 0 ? -8 : 0,
+                },
+              ]}
+            >
+              <Text style={[styles.memberAvatarText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                {initials(m.name)}
+              </Text>
+            </View>
+          ))}
+          {team.memberCount > 4 && (
+            <Text style={[styles.memberCount, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              +{team.memberCount - 4} more
+            </Text>
+          )}
+          {team.memberCount === 0 && (
+            <Text style={[styles.memberCount, { color: colors.dim, fontFamily: "Inter_400Regular" }]}>
+              No members yet
+            </Text>
+          )}
+        </View>
+      )}
+
+      <View style={styles.teamFooter}>
+        <View style={styles.tagRow}>
+          <View style={[styles.tag, { backgroundColor: colors.muted, borderRadius: 4 }]}>
+            <Text style={[styles.tagText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              {team.memberCount} member{team.memberCount !== 1 ? "s" : ""}
+            </Text>
+          </View>
+          <View style={[styles.tag, { backgroundColor: colors.primaryDim, borderRadius: 4 }]}>
+            <Text style={[styles.tagText, { color: colors.primary, fontFamily: "Inter_400Regular" }]}>
+              @{team.ownerHandle}
+            </Text>
+          </View>
+        </View>
+        {team.dayRate ? (
+          <Text style={[styles.teamRate, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>
+            R{team.dayRate}/day
+          </Text>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 export default function TeamsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"discover" | "my">("discover");
+  const { discoverTeams, myTeams, isLoadingDiscover, isLoadingMine, refreshDiscover, refreshMine } = useTeams();
 
   const paddingTop = insets.top + (Platform.OS === "web" ? 67 : 0);
-
-  const renderTeam = ({ item }: { item: Team }) => {
-    const members = item.members.map((id) => ALL_TALENT.find((t) => t.id === id)).filter(Boolean);
-
-    return (
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={() => Haptics.selectionAsync()}
-        style={[
-          styles.teamCard,
-          {
-            backgroundColor: colors.card,
-            borderColor: item.active ? colors.border : colors.borderLight,
-            borderRadius: colors.radius,
-          },
-        ]}
-      >
-        {/* Header */}
-        <View style={styles.teamHeader}>
-          <View style={styles.teamTitleBlock}>
-            <Text style={[styles.teamName, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              {item.name}
-            </Text>
-            <Text style={[styles.teamDesc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {item.desc}
-            </Text>
-          </View>
-          <View style={[styles.statusDot, { backgroundColor: item.active ? colors.green : colors.dim }]} />
-        </View>
-
-        {/* Members */}
-        <View style={styles.membersRow}>
-          {members.map((m, i) => (
-            <View
-              key={m!.id}
-              style={[
-                styles.memberAvatar,
-                {
-                  backgroundColor: m!.type === "model" ? colors.purpleDim : colors.primaryDim,
-                  borderRadius: 10,
-                  borderColor: colors.card,
-                  marginLeft: i > 0 ? -8 : 0,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.memberAvatarText,
-                  { color: m!.type === "model" ? colors.purple : colors.primary, fontFamily: "Inter_600SemiBold" },
-                ]}
-              >
-                {m!.type === "model" ? "✦" : m!.name[0]}
-              </Text>
-            </View>
-          ))}
-          <Text style={[styles.memberCount, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            {members.length} members
-          </Text>
-        </View>
-
-        {/* Tags + rate */}
-        <View style={styles.teamFooter}>
-          <View style={styles.tagRow}>
-            {item.tags.slice(0, 2).map((tag) => (
-              <View
-                key={tag}
-                style={[styles.tag, { backgroundColor: colors.muted, borderRadius: 6 }]}
-              >
-                <Text style={[styles.tagText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  {tag}
-                </Text>
-              </View>
-            ))}
-          </View>
-          <Text style={[styles.teamRate, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>
-            {item.rate}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const teams = activeTab === "discover" ? discoverTeams : myTeams;
+  const isLoading = activeTab === "discover" ? isLoadingDiscover : isLoadingMine;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -161,7 +130,7 @@ export default function TeamsScreen() {
         <TouchableOpacity onPress={() => setDrawerOpen(true)} style={styles.menuBtn} activeOpacity={0.7}>
           <Feather name="menu" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.screenTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+        <Text style={[styles.screenTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
           Teams
         </Text>
         <TouchableOpacity
@@ -175,10 +144,15 @@ export default function TeamsScreen() {
 
       {/* Tabs */}
       <View style={[styles.tabRow, { borderBottomColor: colors.border }]}>
-        {["discover", "my"].map((tab) => (
+        {(["discover", "my"] as const).map((tab) => (
           <TouchableOpacity
             key={tab}
-            onPress={() => { Haptics.selectionAsync(); setActiveTab(tab as "discover" | "my"); }}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setActiveTab(tab);
+              if (tab === "discover") refreshDiscover();
+              else refreshMine();
+            }}
             style={[
               styles.tabBtn,
               { borderBottomColor: activeTab === tab ? colors.primary : "transparent" },
@@ -200,59 +174,70 @@ export default function TeamsScreen() {
         ))}
       </View>
 
-      <FlatList
-        data={activeTab === "discover" ? SAMPLE_TEAMS : []}
-        keyExtractor={(item) => item.id}
-        renderItem={renderTeam}
-        contentContainerStyle={[
-          styles.list,
-          { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 100 },
-        ]}
-        showsVerticalScrollIndicator={false}
-        scrollEnabled
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Feather name="users" size={32} color={colors.dim} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              No teams yet
-            </Text>
-            <Text style={[styles.emptySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Build your first team with the + button above
-            </Text>
-            <TouchableOpacity
-              style={[styles.buildTeamBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
-              onPress={() => router.push("/team-builder")}
-              activeOpacity={0.82}
-            >
-              <Text style={[styles.buildTeamBtnText, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>
-                Build a Team
+      {isLoading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={teams}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <TeamCard team={item} colors={colors} />}
+          contentContainerStyle={[
+            styles.list,
+            { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 100 },
+          ]}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Feather name="users" size={32} color={colors.dim} />
+              <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                No teams yet
               </Text>
-            </TouchableOpacity>
-          </View>
-        }
-        ListHeaderComponent={
-          <View style={[styles.teamBuilderCta, { backgroundColor: colors.primaryDim, borderRadius: colors.radius, marginBottom: 16 }]}>
-            <View style={styles.teamBuilderCtaText}>
-              <Text style={[styles.teamBuilderCtaTitle, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
-                Build your dream team
+              <Text style={[styles.emptySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                {activeTab === "my"
+                  ? "Build your first team with the + button above"
+                  : "No public teams available yet"}
               </Text>
-              <Text style={[styles.teamBuilderCtaSub, { color: colors.primaryDeep, fontFamily: "Inter_400Regular" }]}>
-                Assemble models, artists & creatives for your next campaign
-              </Text>
+              {activeTab === "my" && (
+                <TouchableOpacity
+                  style={[styles.buildTeamBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
+                  onPress={() => router.push("/team-builder")}
+                  activeOpacity={0.82}
+                >
+                  <Text style={[styles.buildTeamBtnText, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>
+                    Build a Team
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
-            <TouchableOpacity
-              style={[styles.ctaBtn, { backgroundColor: colors.primary, borderRadius: colors.radius - 2 }]}
-              onPress={() => router.push("/team-builder")}
-              activeOpacity={0.82}
-            >
-              <Feather name="users" size={14} color="#fff" />
-              <Text style={[styles.ctaBtnText, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>
-                Create
-              </Text>
-            </TouchableOpacity>
-          </View>
-        }
-      />
+          }
+          ListHeaderComponent={
+            activeTab === "discover" ? (
+              <View style={[styles.teamBuilderCta, { backgroundColor: colors.primaryDim, borderRadius: colors.radius, marginBottom: 16 }]}>
+                <View style={styles.teamBuilderCtaText}>
+                  <Text style={[styles.teamBuilderCtaTitle, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+                    Build your dream team
+                  </Text>
+                  <Text style={[styles.teamBuilderCtaSub, { color: colors.primaryDeep, fontFamily: "Inter_400Regular" }]}>
+                    Assemble models, artists & creatives for your next campaign
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.ctaBtn, { backgroundColor: colors.primary, borderRadius: colors.radius - 2 }]}
+                  onPress={() => router.push("/team-builder")}
+                  activeOpacity={0.82}
+                >
+                  <Feather name="users" size={14} color="#fff" />
+                  <Text style={[styles.ctaBtnText, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>
+                    Create
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null
+          }
+        />
+      )}
 
       <ProfileDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </View>
@@ -288,6 +273,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
   },
   tabBtnText: { fontSize: 13 },
+  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
   list: { paddingHorizontal: 16, paddingTop: 16 },
   teamCard: {
     borderWidth: 1,
@@ -308,7 +294,6 @@ const styles = StyleSheet.create({
   membersRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
   },
   memberAvatar: {
     width: 32,

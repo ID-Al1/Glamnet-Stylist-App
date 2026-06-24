@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -15,8 +16,11 @@ import { router } from "expo-router";
 import { ProfileDrawer } from "@/components/ProfileDrawer";
 import { useAuth } from "@/context/AuthContext";
 import { useApplications } from "@/context/ApplicationsContext";
+import { useBookings, type Booking } from "@/context/BookingContext";
 import { usePostings } from "@/context/PostingsContext";
 import { useColors } from "@/hooks/useColors";
+
+type ActiveTab = "overview" | "castings" | "bookings" | "applications" | "analytics";
 
 export default function DashboardScreen() {
   const colors = useColors();
@@ -24,15 +28,129 @@ export default function DashboardScreen() {
   const { user } = useAuth();
   const { totalApplied, applications } = useApplications();
   const { myPostings, totalApplicants, totalPending } = usePostings();
+  const { bookings, isLoading: bookingsLoading } = useBookings();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "castings" | "analytics">("overview");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
 
+  const isClient = user?.role === "client";
   const paddingTop = insets.top + (Platform.OS === "web" ? 67 : 0);
   const repPct = Math.min((user?.repScore ?? 0) / 100, 1);
+
+  const pendingBookings = bookings.filter((b) => b.status === "pending").length;
+  const confirmedBookings = bookings.filter((b) => b.status === "accepted").length;
+
   const shortlisted = myPostings.reduce(
     (sum, j) => sum + j.applicants.filter((a) => a.status === "shortlisted").length,
     0
   );
+
+  const appliedList = Object.values(applications).sort((a, b) => b.appliedAt - a.appliedAt);
+  const pendingApps = appliedList.filter((a) => a.status === "pending").length;
+  const shortlistedApps = appliedList.filter((a) => a.status === "shortlisted").length;
+  const declinedApps = appliedList.filter((a) => a.status === "declined").length;
+
+  const tabs = isClient
+    ? [
+        { id: "overview" as const, label: "Overview" },
+        { id: "bookings" as const, label: "Bookings" },
+        { id: "castings" as const, label: "Castings" },
+        { id: "analytics" as const, label: "Analytics" },
+      ]
+    : [
+        { id: "overview" as const, label: "Overview" },
+        { id: "applications" as const, label: "Applications" },
+        { id: "analytics" as const, label: "Analytics" },
+      ];
+
+  const statsGrid = isClient
+    ? [
+        { label: "Castings", value: String(myPostings.length), icon: "briefcase" as const, color: colors.purple },
+        { label: "Bookings", value: String(bookings.length), icon: "calendar" as const, color: colors.primary },
+        { label: "Confirmed", value: String(confirmedBookings), icon: "check-circle" as const, color: colors.green },
+        { label: "Pending", value: String(pendingBookings), icon: "clock" as const, color: colors.accent },
+      ]
+    : [
+        { label: "Jobs Done", value: String(user?.jobsCount ?? 0), icon: "briefcase" as const, color: colors.primary },
+        { label: "Applied", value: String(totalApplied), icon: "send" as const, color: colors.purple },
+        { label: "Earned", value: `R${(user?.earnings ?? 0).toLocaleString()}`, icon: "dollar-sign" as const, color: colors.green },
+        { label: "Rep Score", value: String(user?.repScore ?? 0), icon: "star" as const, color: colors.accent },
+      ];
+
+  const quickActions = isClient
+    ? [
+        {
+          icon: "edit-3" as const,
+          label: "Post a Casting",
+          sub: "Find talent for your project",
+          color: colors.primary,
+          onPress: () => router.push("/post-job"),
+          badge: undefined as string | undefined,
+        },
+        {
+          icon: "briefcase" as const,
+          label: "Manage Castings",
+          sub: myPostings.length > 0
+            ? `${totalPending} pending ${totalPending !== 1 ? "applications" : "application"}`
+            : "No castings posted yet",
+          color: colors.purple,
+          onPress: () => router.push("/my-castings"),
+          badge: totalPending > 0 ? String(totalPending) : undefined,
+        },
+        {
+          icon: "users" as const,
+          label: "Discover Talent",
+          sub: "Find models, MUAs & more",
+          color: colors.green,
+          onPress: () => (router as any).push("/(tabs)/"),
+          badge: undefined as string | undefined,
+        },
+        {
+          icon: "calendar" as const,
+          label: "My Bookings",
+          sub: bookings.length > 0
+            ? `${pendingBookings} pending · ${confirmedBookings} confirmed`
+            : "Book an artist directly",
+          color: colors.blue,
+          onPress: () => setActiveTab("bookings"),
+          badge: pendingBookings > 0 ? String(pendingBookings) : undefined,
+        },
+      ]
+    : [
+        {
+          icon: "briefcase" as const,
+          label: "Browse Appointments",
+          sub: "Find your next gig",
+          color: colors.primary,
+          onPress: () => router.push("/(tabs)/earn"),
+          badge: undefined as string | undefined,
+        },
+        {
+          icon: "send" as const,
+          label: "My Applications",
+          sub: totalApplied > 0
+            ? `${totalApplied} applied`
+            : "Browse available appointments",
+          color: colors.purple,
+          onPress: () => router.push("/(tabs)/earn"),
+          badge: undefined as string | undefined,
+        },
+        {
+          icon: "users" as const,
+          label: "Discover",
+          sub: "Explore the network",
+          color: colors.green,
+          onPress: () => (router as any).push("/(tabs)/"),
+          badge: undefined as string | undefined,
+        },
+        {
+          icon: "settings" as const,
+          label: "Settings",
+          sub: "Availability, rates & prefs",
+          color: colors.accent,
+          onPress: () => router.push("/settings"),
+          badge: undefined as string | undefined,
+        },
+      ];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -50,7 +168,7 @@ export default function DashboardScreen() {
         <TouchableOpacity onPress={() => setDrawerOpen(true)} style={styles.menuBtn} activeOpacity={0.7}>
           <Feather name="menu" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.screenTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+        <Text style={[styles.screenTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
           Dashboard
         </Text>
         <TouchableOpacity
@@ -64,13 +182,13 @@ export default function DashboardScreen() {
 
       {/* Tabs */}
       <View style={[styles.tabRow, { borderBottomColor: colors.border }]}>
-        {(["overview", "castings", "analytics"] as const).map((tab) => (
+        {tabs.map((tab) => (
           <TouchableOpacity
-            key={tab}
-            onPress={() => { Haptics.selectionAsync(); setActiveTab(tab); }}
+            key={tab.id}
+            onPress={() => { Haptics.selectionAsync(); setActiveTab(tab.id); }}
             style={[
               styles.tabBtn,
-              { borderBottomColor: activeTab === tab ? colors.primary : "transparent" },
+              { borderBottomColor: activeTab === tab.id ? colors.primary : "transparent" },
             ]}
             activeOpacity={0.75}
           >
@@ -79,17 +197,31 @@ export default function DashboardScreen() {
                 style={[
                   styles.tabBtnText,
                   {
-                    color: activeTab === tab ? colors.primary : colors.mutedForeground,
-                    fontFamily: activeTab === tab ? "Inter_600SemiBold" : "Inter_400Regular",
+                    color: activeTab === tab.id ? colors.primary : colors.mutedForeground,
+                    fontFamily: activeTab === tab.id ? "Inter_600SemiBold" : "Inter_400Regular",
                   },
                 ]}
               >
-                {tab === "overview" ? "Overview" : tab === "castings" ? "Castings" : "Analytics"}
+                {tab.label}
               </Text>
-              {tab === "castings" && totalPending > 0 && (
+              {tab.id === "bookings" && pendingBookings > 0 && (
+                <View style={[styles.tabBadge, { backgroundColor: colors.blue }]}>
+                  <Text style={[styles.tabBadgeText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                    {pendingBookings}
+                  </Text>
+                </View>
+              )}
+              {tab.id === "castings" && totalPending > 0 && (
                 <View style={[styles.tabBadge, { backgroundColor: colors.accent }]}>
                   <Text style={[styles.tabBadgeText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
                     {totalPending}
+                  </Text>
+                </View>
+              )}
+              {tab.id === "applications" && pendingApps > 0 && (
+                <View style={[styles.tabBadge, { backgroundColor: colors.green }]}>
+                  <Text style={[styles.tabBadgeText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                    {pendingApps}
                   </Text>
                 </View>
               )}
@@ -105,6 +237,7 @@ export default function DashboardScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── OVERVIEW ── */}
         {activeTab === "overview" && (
           <>
             {/* Welcome banner */}
@@ -124,24 +257,24 @@ export default function DashboardScreen() {
                   Good to see you,
                 </Text>
                 <Text style={[styles.welcomeName, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                  {user?.name ?? "Creative"}
+                  {user?.name ?? "Welcome"}
                 </Text>
               </View>
-              <View style={[styles.tierBadge, { backgroundColor: colors.primary, borderRadius: 8 }]}>
+              <View
+                style={[
+                  styles.tierBadge,
+                  { backgroundColor: isClient ? colors.accent : colors.primary, borderRadius: 8 },
+                ]}
+              >
                 <Text style={[styles.tierBadgeText, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>
-                  {user?.tier ?? "New"}
+                  {isClient ? "Client" : (user?.tier ?? "New")}
                 </Text>
               </View>
             </View>
 
             {/* Stats grid */}
             <View style={styles.statsGrid}>
-              {[
-                { label: "Jobs Done", value: String(user?.jobs ?? 0), icon: "briefcase" as const, color: colors.primary },
-                { label: "Applied", value: String(totalApplied), icon: "send" as const, color: colors.purple },
-                { label: "Castings Posted", value: String(myPostings.length), icon: "edit-3" as const, color: colors.accent },
-                { label: "Earned", value: `R${(user?.earnings ?? 0).toLocaleString()}`, icon: "dollar-sign" as const, color: colors.green },
-              ].map((s) => (
+              {statsGrid.map((s) => (
                 <View
                   key={s.label}
                   style={[
@@ -166,85 +299,50 @@ export default function DashboardScreen() {
               ))}
             </View>
 
-            {/* Rep Score bar */}
-            <View
-              style={[
-                styles.repCard,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  borderRadius: colors.radius,
-                },
-              ]}
-            >
-              <View style={styles.repHeader}>
-                <Text style={[styles.repTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                  Reputation Score
-                </Text>
-                <Text style={[styles.repScore, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>
-                  {user?.repScore ?? 0}/100
+            {/* Rep Score bar — stylist only */}
+            {!isClient && (
+              <View
+                style={[
+                  styles.repCard,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                    borderRadius: colors.radius,
+                  },
+                ]}
+              >
+                <View style={styles.repHeader}>
+                  <Text style={[styles.repTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                    Reputation Score
+                  </Text>
+                  <Text style={[styles.repScore, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>
+                    {user?.repScore ?? 0}/100
+                  </Text>
+                </View>
+                <View style={[styles.repBarBg, { backgroundColor: colors.muted, borderRadius: 4 }]}>
+                  <View
+                    style={[
+                      styles.repBarFill,
+                      {
+                        width: `${repPct * 100}%`,
+                        backgroundColor: colors.accent,
+                        borderRadius: 4,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={[styles.repNote, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  Complete more jobs and get great reviews to increase your score.
                 </Text>
               </View>
-              <View style={[styles.repBarBg, { backgroundColor: colors.muted, borderRadius: 4 }]}>
-                <View
-                  style={[
-                    styles.repBarFill,
-                    {
-                      width: `${repPct * 100}%`,
-                      backgroundColor: colors.accent,
-                      borderRadius: 4,
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={[styles.repNote, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                Complete more jobs and get great reviews to increase your score.
-              </Text>
-            </View>
+            )}
 
             {/* Quick Actions */}
             <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
               Quick Actions
             </Text>
             <View style={styles.quickActions}>
-              {[
-                {
-                  icon: "briefcase" as const,
-                  label: "My Castings",
-                  sub: myPostings.length > 0
-                    ? `${totalPending} pending ${totalPending !== 1 ? "applications" : "application"}`
-                    : "Post your first casting",
-                  color: colors.purple,
-                  onPress: () => router.push("/my-castings"),
-                  badge: totalPending > 0 ? String(totalPending) : undefined,
-                },
-                {
-                  icon: "send" as const,
-                  label: "My Applications",
-                  sub: totalApplied > 0
-                    ? `${totalApplied} job${totalApplied !== 1 ? "s" : ""} applied`
-                    : "Browse the job board",
-                  color: colors.primary,
-                  onPress: () => router.push("/(tabs)/earn"),
-                  badge: undefined,
-                },
-                {
-                  icon: "users" as const,
-                  label: "Discover Talent",
-                  sub: "Find models, MUAs & more",
-                  color: colors.green,
-                  onPress: () => (router as any).push("/(tabs)/"),
-                  badge: undefined,
-                },
-                {
-                  icon: "settings" as const,
-                  label: "Settings",
-                  sub: "Availability, rates & prefs",
-                  color: colors.accent,
-                  onPress: () => router.push("/settings"),
-                  badge: undefined,
-                },
-              ].map((a) => (
+              {quickActions.map((a) => (
                 <TouchableOpacity
                   key={a.label}
                   onPress={() => { Haptics.selectionAsync(); a.onPress(); }}
@@ -282,16 +380,26 @@ export default function DashboardScreen() {
               ))}
             </View>
 
-            {/* Applications preview */}
-            {totalApplied > 0 && (
+            {/* Recent applications preview — stylist only */}
+            {!isClient && totalApplied > 0 && (
               <>
                 <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
                   Recent Applications
                 </Text>
-                {Object.values(applications)
-                  .sort((a, b) => b.appliedAt - a.appliedAt)
-                  .slice(0, 3)
-                  .map((app) => (
+                {appliedList.slice(0, 3).map((app) => {
+                  const statusColor =
+                    app.status === "shortlisted"
+                      ? colors.green
+                      : app.status === "declined"
+                      ? colors.primary
+                      : colors.accent;
+                  const statusBg =
+                    app.status === "shortlisted"
+                      ? colors.greenDim
+                      : app.status === "declined"
+                      ? colors.primaryDim
+                      : colors.accentDim;
+                  return (
                     <View
                       key={app.jobId}
                       style={[
@@ -304,30 +412,142 @@ export default function DashboardScreen() {
                         },
                       ]}
                     >
-                      <View style={[styles.appDot, { backgroundColor: colors.green }]} />
+                      <View style={[styles.appDot, { backgroundColor: statusColor }]} />
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.appRole, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
                           Applied as {app.role}
                         </Text>
                         <Text style={[styles.appTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                          Job ID: {app.jobId} · Pending review
+                          Job #{app.jobId}
                         </Text>
                       </View>
-                      <View style={[styles.pendingBadge, { backgroundColor: colors.accentDim, borderRadius: 6 }]}>
-                        <Text style={[styles.pendingText, { color: colors.accent, fontFamily: "Inter_500Medium" }]}>
-                          Pending
+                      <View style={[styles.pendingBadge, { backgroundColor: statusBg, borderRadius: 6 }]}>
+                        <Text style={[styles.pendingText, { color: statusColor, fontFamily: "Inter_500Medium" }]}>
+                          {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
                         </Text>
                       </View>
                     </View>
-                  ))}
+                  );
+                })}
               </>
             )}
           </>
         )}
 
+        {/* ── APPLICATIONS (stylist) ── */}
+        {activeTab === "applications" && (
+          <>
+            {appliedList.length === 0 ? (
+              <View style={styles.emptyState}>
+                <View style={[styles.emptyIcon, { backgroundColor: colors.primaryDim, borderRadius: 28 }]}>
+                  <Feather name="send" size={24} color={colors.primary} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                  No applications yet
+                </Text>
+                <Text style={[styles.emptySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  Browse appointments and apply to start building your portfolio.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/earn"); }}
+                  style={[styles.emptyBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
+                  activeOpacity={0.82}
+                >
+                  <Feather name="briefcase" size={15} color="#fff" />
+                  <Text style={[styles.emptyBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                    Browse Appointments
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <View style={styles.castingStats}>
+                  {[
+                    { label: "Applied", value: String(totalApplied), color: colors.purple },
+                    { label: "Pending", value: String(pendingApps), color: colors.accent },
+                    { label: "Shortlisted", value: String(shortlistedApps), color: colors.green },
+                    { label: "Declined", value: String(declinedApps), color: colors.primary },
+                  ].map((s) => (
+                    <View
+                      key={s.label}
+                      style={[
+                        styles.castingStatCard,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: colors.border,
+                          borderRadius: colors.radius,
+                          borderWidth: 1,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.castingStatValue, { color: s.color, fontFamily: "Inter_700Bold" }]}>
+                        {s.value}
+                      </Text>
+                      <Text style={[styles.castingStatLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                        {s.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                {appliedList.map((app) => {
+                  const statusColor =
+                    app.status === "shortlisted"
+                      ? colors.green
+                      : app.status === "declined"
+                      ? colors.primary
+                      : colors.accent;
+                  const statusBg =
+                    app.status === "shortlisted"
+                      ? colors.greenDim
+                      : app.status === "declined"
+                      ? colors.primaryDim
+                      : colors.accentDim;
+                  return (
+                    <TouchableOpacity
+                      key={app.jobId}
+                      onPress={() => { Haptics.selectionAsync(); router.push(`/jobs/${app.jobId}`); }}
+                      activeOpacity={0.82}
+                      style={[
+                        styles.castingPreviewCard,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor:
+                            app.status === "shortlisted"
+                              ? colors.green + "40"
+                              : app.status === "declined"
+                              ? colors.primary + "30"
+                              : colors.border,
+                          borderRadius: colors.radius,
+                          borderWidth: 1,
+                        },
+                      ]}
+                    >
+                      <View style={styles.castingPreviewRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.castingPreviewTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                            Applied as {app.role}
+                          </Text>
+                          <Text style={[styles.castingPreviewSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                            Job #{app.jobId} · {new Date(app.appliedAt).toLocaleDateString()}
+                          </Text>
+                        </View>
+                        <View style={[styles.pendingBadge, { backgroundColor: statusBg, borderRadius: 6 }]}>
+                          <Text style={[styles.pendingText, { color: statusColor, fontFamily: "Inter_500Medium" }]}>
+                            {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
+            )}
+          </>
+        )}
+
+        {/* ── CASTINGS (client) ── */}
         {activeTab === "castings" && (
           <>
-            {/* Castings overview */}
             {myPostings.length === 0 ? (
               <View style={styles.emptyState}>
                 <View style={[styles.emptyIcon, { backgroundColor: colors.primaryDim, borderRadius: 28 }]}>
@@ -352,7 +572,6 @@ export default function DashboardScreen() {
               </View>
             ) : (
               <>
-                {/* Casting stats */}
                 <View style={styles.castingStats}>
                   {[
                     { label: "Posted", value: String(myPostings.length), color: colors.purple },
@@ -381,8 +600,6 @@ export default function DashboardScreen() {
                     </View>
                   ))}
                 </View>
-
-                {/* View all button */}
                 <TouchableOpacity
                   onPress={() => { Haptics.selectionAsync(); router.push("/my-castings"); }}
                   style={[
@@ -409,8 +626,6 @@ export default function DashboardScreen() {
                   )}
                   <Feather name="arrow-right" size={14} color={colors.primary} style={{ marginLeft: "auto" as any }} />
                 </TouchableOpacity>
-
-                {/* Castings preview */}
                 {myPostings.slice(0, 3).map((job) => {
                   const pending = job.applicants.filter((a) => a.status === "pending").length;
                   return (
@@ -454,14 +669,144 @@ export default function DashboardScreen() {
           </>
         )}
 
+        {/* ── BOOKINGS (client) ── */}
+        {activeTab === "bookings" && (
+          <>
+            {bookingsLoading ? (
+              <View style={styles.emptyState}>
+                <ActivityIndicator size="small" color={colors.primary} />
+              </View>
+            ) : bookings.length === 0 ? (
+              <View style={styles.emptyState}>
+                <View style={[styles.emptyIcon, { backgroundColor: colors.blueDim, borderRadius: 28 }]}>
+                  <Feather name="calendar" size={24} color={colors.blue} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                  No bookings yet
+                </Text>
+                <Text style={[styles.emptySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  Browse talent and book an artist directly for your next appointment.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => { Haptics.selectionAsync(); (router as any).push("/(tabs)/"); }}
+                  style={[styles.emptyBtn, { backgroundColor: colors.blue, borderRadius: colors.radius }]}
+                  activeOpacity={0.82}
+                >
+                  <Feather name="search" size={15} color="#fff" />
+                  <Text style={[styles.emptyBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                    Discover Talent
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <View style={styles.castingStats}>
+                  {[
+                    { label: "Total", value: String(bookings.length), color: colors.blue },
+                    { label: "Pending", value: String(pendingBookings), color: colors.accent },
+                    { label: "Confirmed", value: String(confirmedBookings), color: colors.green },
+                    { label: "Done", value: String(bookings.filter((b) => b.status === "completed").length), color: colors.purple },
+                  ].map((s) => (
+                    <View
+                      key={s.label}
+                      style={[
+                        styles.castingStatCard,
+                        { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius, borderWidth: 1 },
+                      ]}
+                    >
+                      <Text style={[styles.castingStatValue, { color: s.color, fontFamily: "Inter_700Bold" }]}>
+                        {s.value}
+                      </Text>
+                      <Text style={[styles.castingStatLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                        {s.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                {bookings.map((b: Booking) => {
+                  const statusColors: Record<Booking["status"], string> = {
+                    pending: colors.accent,
+                    accepted: colors.green,
+                    declined: colors.primary,
+                    completed: colors.purple,
+                    cancelled: colors.dim,
+                  };
+                  const statusBgs: Record<Booking["status"], string> = {
+                    pending: colors.accentDim,
+                    accepted: colors.greenDim,
+                    declined: colors.primaryDim,
+                    completed: colors.purpleDim,
+                    cancelled: colors.muted,
+                  };
+                  const sc = statusColors[b.status];
+                  const sb = statusBgs[b.status];
+                  return (
+                    <View
+                      key={b.id}
+                      style={[
+                        styles.bookingCard,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: b.status === "pending" ? colors.accent + "40" : colors.border,
+                          borderRadius: colors.radius,
+                        },
+                      ]}
+                    >
+                      <View style={styles.bookingCardRow}>
+                        <View style={{ flex: 1, gap: 3 }}>
+                          <Text style={[styles.bookingArtist, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                            {b.talentName ?? "Artist"}
+                          </Text>
+                          <Text style={[styles.bookingMeta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                            {b.jobType} · {b.date}
+                          </Text>
+                          <Text style={[styles.bookingMeta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                            {b.location}{b.isHouseCall ? " · House call" : ""}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: "flex-end", gap: 6 }}>
+                          <View style={[styles.pendingBadge, { backgroundColor: sb, borderRadius: 6 }]}>
+                            <Text style={[styles.pendingText, { color: sc, fontFamily: "Inter_500Medium" }]}>
+                              {b.status.charAt(0).toUpperCase() + b.status.slice(1)}
+                            </Text>
+                          </View>
+                          {b.totalCost > 0 && (
+                            <Text style={[styles.bookingCost, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>
+                              R{b.totalCost.toLocaleString()}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                      {b.notes ? (
+                        <Text style={[styles.bookingNotes, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
+                          {b.notes}
+                        </Text>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </>
+            )}
+          </>
+        )}
+
+        {/* ── ANALYTICS ── */}
         {activeTab === "analytics" && (
           <View style={styles.analyticsSection}>
-            {[
-              { label: "Profile Views", value: "42", trend: "+12%", color: colors.blue },
-              { label: "Job Applications", value: String(totalApplied), trend: totalApplied > 0 ? "Active" : "—", color: colors.purple },
-              { label: "Casting Applicants", value: String(totalApplicants), trend: totalApplicants > 0 ? "Active" : "—", color: colors.primary },
-              { label: "Rep Score", value: String(user?.repScore ?? 0), trend: `${user?.tier ?? "New"}`, color: colors.accent },
-            ].map((m) => (
+            {(isClient
+              ? [
+                  { label: "Castings Posted", value: String(myPostings.length), trend: myPostings.length > 0 ? "Active" : "—", color: colors.purple },
+                  { label: "Total Applicants", value: String(totalApplicants), trend: totalApplicants > 0 ? "Active" : "—", color: colors.primary },
+                  { label: "Pending Review", value: String(totalPending), trend: totalPending > 0 ? "Needs review" : "—", color: colors.accent },
+                  { label: "Shortlisted", value: String(shortlisted), trend: shortlisted > 0 ? "In review" : "—", color: colors.green },
+                ]
+              : [
+                  { label: "Jobs Applied", value: String(totalApplied), trend: totalApplied > 0 ? "Active" : "—", color: colors.purple },
+                  { label: "Jobs Done", value: String(user?.jobsCount ?? 0), trend: user?.jobsCount ? "Completed" : "—", color: colors.primary },
+                  { label: "Total Earned", value: `R${(user?.earnings ?? 0).toLocaleString()}`, trend: user?.earnings ? "Paid" : "—", color: colors.green },
+                  { label: "Rep Score", value: String(user?.repScore ?? 0), trend: user?.tier ?? "New", color: colors.accent },
+                ]
+            ).map((m) => (
               <View
                 key={m.label}
                 style={[
@@ -521,11 +866,11 @@ const styles = StyleSheet.create({
   welcomeName: { fontSize: 20, letterSpacing: -0.5 },
   tierBadge: { paddingHorizontal: 12, paddingVertical: 6 },
   tierBadgeText: { fontSize: 12, letterSpacing: 0.3 },
-  statsGrid: { flexDirection: "row", flexWrap: "wrap" as const, gap: 10 },
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   statCard: { width: "48%", padding: 14, borderWidth: 1, gap: 8, alignItems: "flex-start" },
   statIcon: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
   statValue: { fontSize: 22, letterSpacing: -0.6 },
-  statLabel: { fontSize: 11, textTransform: "uppercase" as const, letterSpacing: 0.4 },
+  statLabel: { fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 },
   repCard: { padding: 16, borderWidth: 1, gap: 10 },
   repHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   repTitle: { fontSize: 14 },
@@ -557,7 +902,7 @@ const styles = StyleSheet.create({
   castingStats: { flexDirection: "row", gap: 8 },
   castingStatCard: { flex: 1, padding: 12, alignItems: "center", gap: 4 },
   castingStatValue: { fontSize: 20, letterSpacing: -0.5 },
-  castingStatLabel: { fontSize: 9, textTransform: "uppercase" as const, letterSpacing: 0.5, textAlign: "center" },
+  castingStatLabel: { fontSize: 9, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center" },
   viewAllBtn: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14 },
   viewAllText: { fontSize: 14 },
   viewAllBadge: { paddingHorizontal: 8, paddingVertical: 4 },
@@ -568,11 +913,17 @@ const styles = StyleSheet.create({
   castingPreviewSub: { fontSize: 11, marginTop: 2 },
   castingPreviewRight: { alignItems: "center" },
   castingApplicantCount: { fontSize: 20, letterSpacing: -0.4 },
-  castingApplicantLabel: { fontSize: 9, textTransform: "uppercase" as const, letterSpacing: 0.3 },
+  castingApplicantLabel: { fontSize: 9, textTransform: "uppercase", letterSpacing: 0.3 },
   analyticsSection: { gap: 10 },
   analyticsCard: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderWidth: 1 },
   analyticsLabel: { fontSize: 12, marginBottom: 4 },
   analyticsValue: { fontSize: 24, letterSpacing: -0.6 },
   trendBadge: { paddingHorizontal: 10, paddingVertical: 5 },
   trendText: { fontSize: 12 },
+  bookingCard: { padding: 14, borderWidth: 1, gap: 6 },
+  bookingCardRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  bookingArtist: { fontSize: 14, letterSpacing: -0.2 },
+  bookingMeta: { fontSize: 12 },
+  bookingCost: { fontSize: 14, letterSpacing: -0.3 },
+  bookingNotes: { fontSize: 12, fontStyle: "italic" },
 });

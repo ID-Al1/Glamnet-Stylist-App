@@ -48,8 +48,10 @@ export default function SignUpScreen() {
 
   const validateStep2 = () => {
     const e: Record<string, string> = {};
-    if (!name.trim()) e.name = "Name is required";
-    if (!email.trim() || !email.includes("@")) e.email = "Valid email required";
+    const nameParts = name.trim().split(/\s+/);
+    if (nameParts.length < 2 || !nameParts[1]) e.name = "Please enter your full name (first and last name)";
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!email.trim() || !emailRegex.test(email.trim())) e.email = "Please enter a valid email address";
     if (password.length < 6) e.password = "Password must be at least 6 characters";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -148,7 +150,7 @@ export default function SignUpScreen() {
         {step === 1 && (
           <View style={styles.stepContent}>
             <View style={styles.stepHeader}>
-              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                 Join GlamNet
               </Text>
               <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -229,7 +231,7 @@ export default function SignUpScreen() {
                   <Feather name="scissors" size={26} color={role === "stylist" ? "#fff" : colors.mutedForeground} />
                 </View>
                 <Text style={[styles.roleCardTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                  Creative Professional
+                  Artist
                 </Text>
                 <Text style={[styles.roleCardDesc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
                   Showcase your talent, get booked, and grow your career.
@@ -250,6 +252,53 @@ export default function SignUpScreen() {
                   </View>
                 )}
               </TouchableOpacity>
+
+              {/* Brand */}
+              <TouchableOpacity
+                style={[
+                  styles.roleCard,
+                  {
+                    borderColor: role === "brand" ? colors.accent : colors.border,
+                    backgroundColor: role === "brand" ? colors.accentDim : colors.card,
+                    borderRadius: colors.radius + 4,
+                  },
+                ]}
+                onPress={() => { Haptics.selectionAsync(); setRole("brand"); }}
+                activeOpacity={0.8}
+              >
+                <View
+                  style={[
+                    styles.roleIconWrap,
+                    {
+                      backgroundColor: role === "brand" ? colors.accent : colors.muted,
+                      borderRadius: 14,
+                    },
+                  ]}
+                >
+                  <Feather name="star" size={26} color={role === "brand" ? "#fff" : colors.mutedForeground} />
+                </View>
+                <Text style={[styles.roleCardTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                  Brand
+                </Text>
+                <Text style={[styles.roleCardDesc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  Find and book talent for your campaigns and productions.
+                </Text>
+                <View style={styles.roleFeatures}>
+                  {["Post campaigns", "Browse artists", "Manage bookings", "Track spend"].map((f) => (
+                    <View key={f} style={styles.roleFeature}>
+                      <Feather name="check" size={12} color={colors.green} />
+                      <Text style={[styles.roleFeatureText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                        {f}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                {role === "brand" && (
+                  <View style={[styles.selectedBadge, { backgroundColor: colors.accent }]}>
+                    <Feather name="check" size={12} color="#fff" />
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -258,7 +307,7 @@ export default function SignUpScreen() {
         {step === 2 && (
           <View style={styles.stepContent}>
             <View style={styles.stepHeader}>
-              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                 Create account
               </Text>
               <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -268,7 +317,7 @@ export default function SignUpScreen() {
 
             <View style={styles.form}>
               {[
-                { key: "name", label: "Full Name", placeholder: "Your name", value: name, set: setName, icon: "user" as const, keyboard: "default" as const },
+                { key: "name", label: "Full Name", placeholder: "First and last name", value: name, set: setName, icon: "user" as const, keyboard: "default" as const },
                 { key: "email", label: "Email Address", placeholder: "your@email.com", value: email, set: setEmail, icon: "mail" as const, keyboard: "email-address" as const },
                 { key: "location", label: "Location", placeholder: "e.g. Johannesburg", value: location, set: setLocation, icon: "map-pin" as const, keyboard: "default" as const },
               ].map((field) => (
@@ -351,7 +400,7 @@ export default function SignUpScreen() {
         {step === 3 && role === "stylist" && (
           <View style={styles.stepContent}>
             <View style={styles.stepHeader}>
-              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                 Your specialties
               </Text>
               <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -393,12 +442,13 @@ export default function SignUpScreen() {
               })}
             </View>
 
-            {errors.submit && (
-              <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_400Regular", textAlign: "center" }]}>
-                {errors.submit}
-              </Text>
-            )}
           </View>
+        )}
+
+        {errors.submit && (
+          <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 24, paddingTop: 8 }]}>
+            {errors.submit}
+          </Text>
         )}
       </ScrollView>
 

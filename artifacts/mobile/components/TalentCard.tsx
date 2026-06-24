@@ -21,6 +21,7 @@ export function TalentCard({ talent, onPress, compact = false }: TalentCardProps
   const isModel = talent.type === "model";
   const accentColor = isModel ? colors.purple : colors.primary;
   const tierColor = TIER_COLORS[talent.tier] ?? colors.muted;
+  const gold = colors.gold;
 
   return (
     <TouchableOpacity
@@ -112,6 +113,14 @@ export function TalentCard({ talent, onPress, compact = false }: TalentCardProps
           {/* Badges row */}
           {!compact && (
             <View style={styles.badgeRow}>
+              {talent.foundingMember && (
+                <View style={[styles.badge, { backgroundColor: gold + "18", borderColor: gold + "40" }]}>
+                  <Feather name="award" size={9} color={gold} />
+                  <Text style={[styles.badgeText, { color: gold, fontFamily: "Inter_700Bold" }]}>
+                    Founding
+                  </Text>
+                </View>
+              )}
               <View
                 style={[
                   styles.badge,

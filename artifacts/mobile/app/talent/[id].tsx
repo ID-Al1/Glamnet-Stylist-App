@@ -1,29 +1,63 @@
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  Alert,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ALL_TALENT, TIER_COLORS } from "@/constants/data";
+import { TIER_COLORS } from "@/constants/data";
 import { useColors } from "@/hooks/useColors";
+import { apiFetch } from "@/lib/api";
 import { useMessaging } from "@/context/MessagingContext";
+import { useTalent } from "@/context/TalentContext";
+import { usePortfolio, type PortfolioItem, JOB_TYPES } from "@/context/PortfolioContext";
+
+const JOB_TYPE_LABELS: Record<string, string> = {
+  editorial: "Editorial", commercial: "Commercial", events: "Events",
+  social: "Social", campaign: "Campaign", film: "Film", runway: "Runway",
+};
+
+interface RatingRow {
+  id: string;
+  score: number;
+  comment: string | null;
+  createdAt: string;
+  reviewerName: string | null;
+  reviewerHandle: string | null;
+}
+
+interface RatingSummary {
+  averageScore: number | null;
+  count: number;
+  ratings: RatingRow[];
+}
 
 export default function TalentDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [saved, setSaved] = useState(false);
+  const [ratingSummary, setRatingSummary] = useState<RatingSummary | null>(null);
+  const [portfolioFilter, setPortfolioFilter] = useState<string>("all");
+  const { items: portfolioItems, loadPortfolio, isLoading: portfolioLoading } = usePortfolio();
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [pendingScore, setPendingScore] = useState(0);
+  const [pendingComment, setPendingComment] = useState("");
+  const [submittingRating, setSubmittingRating] = useState(false);
   const { getOrCreateThread } = useMessaging();
+  const { talent: allTalent } = useTalent();
 
-  const talent = ALL_TALENT.find((t) => t.id === id);
+  const talent = allTalent.find((t) => t.id === id);
 
   const paddingTop = insets.top + (Platform.OS === "web" ? 67 : 0);
   const paddingBottom = insets.bottom + (Platform.OS === "web" ? 34 : 0);
@@ -38,14 +72,50 @@ export default function TalentDetailScreen() {
     );
   }
 
+  const fetchRatings = useCallback(async () => {
+    try {
+      const data = await apiFetch<RatingSummary>(`/ratings/talent/${talent.id}`);
+      setRatingSummary(data);
+    } catch {
+      // non-fatal — ratings section stays hidden
+    }
+  }, [talent.id]);
+
+  useEffect(() => { fetchRatings(); }, [fetchRatings]);
+  useEffect(() => { if (talent) loadPortfolio(talent.id); }, [talent?.id]);
+
+  const handleSubmitRating = async () => {
+    if (pendingScore === 0) {
+      Alert.alert("Select a rating", "Please tap a star to rate this artist.");
+      return;
+    }
+    setSubmittingRating(true);
+    try {
+      await apiFetch("/ratings", {
+        method: "POST",
+        body: { revieweeId: talent.id, score: pendingScore, comment: pendingComment || undefined },
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowRatingModal(false);
+      setPendingScore(0);
+      setPendingComment("");
+      fetchRatings();
+    } catch {
+      Alert.alert("Error", "Could not submit rating. Please try again.");
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
+
   const isModel = talent.type === "model";
   const accentColor = isModel ? colors.purple : colors.primary;
   const tierColor = TIER_COLORS[talent.tier] ?? colors.mutedForeground;
+  const gold = colors.gold;
   const verifiedCount = Object.values(talent.verification).filter(Boolean).length;
 
-  const handleMessage = () => {
+  const handleMessage = async () => {
     Haptics.selectionAsync();
-    const threadId = getOrCreateThread(
+    const threadId = await getOrCreateThread(
       talent.id,
       talent.name,
       talent.role,
@@ -71,7 +141,7 @@ export default function TalentDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.navTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+        <Text style={[styles.navTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
           Profile
         </Text>
         <TouchableOpacity
@@ -130,6 +200,14 @@ export default function TalentDetailScreen() {
               {talent.role}
             </Text>
             <View style={styles.heroBadges}>
+              {talent.foundingMember && (
+                <View style={[styles.badge, { backgroundColor: gold + "18", borderColor: gold + "50", paddingHorizontal: 10 }]}>
+                  <Feather name="award" size={10} color={gold} />
+                  <Text style={[styles.badgeText, { color: gold, fontFamily: "Inter_700Bold" }]}>
+                    Founding Member
+                  </Text>
+                </View>
+              )}
               <View style={[styles.badge, { backgroundColor: tierColor + "18", borderColor: tierColor + "40" }]}>
                 <Text style={[styles.badgeText, { color: tierColor, fontFamily: "Inter_600SemiBold" }]}>
                   {talent.tier}
@@ -331,7 +409,189 @@ export default function TalentDetailScreen() {
             ))}
           </View>
         )}
+
+        {/* Portfolio */}
+        {(portfolioItems.length > 0 || portfolioLoading) && (
+          <View style={styles.section}>
+            <View style={styles.reviewsHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Portfolio</Text>
+              <Text style={[styles.avgCount, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                {portfolioItems.length} {portfolioItems.length === 1 ? "credit" : "credits"}
+              </Text>
+            </View>
+            {/* Job type filter pills */}
+            {portfolioItems.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
+                {["all", ...Array.from(new Set(portfolioItems.map((i) => i.jobType)))].map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    onPress={() => { Haptics.selectionAsync(); setPortfolioFilter(t); }}
+                    style={[
+                      styles.filterChip,
+                      {
+                        backgroundColor: portfolioFilter === t ? colors.primary : colors.muted,
+                        borderRadius: colors.radius - 4,
+                      },
+                    ]}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.filterChipText, { color: portfolioFilter === t ? "#fff" : colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+                      {t === "all" ? "All" : JOB_TYPE_LABELS[t] ?? t}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+            {portfolioItems
+              .filter((i) => portfolioFilter === "all" || i.jobType === portfolioFilter)
+              .map((item: PortfolioItem) => (
+                <View
+                  key={item.id}
+                  style={[styles.portfolioCard, { backgroundColor: colors.card, borderColor: item.isHighlight === "true" ? colors.accent + "50" : colors.border, borderRadius: colors.radius }]}
+                >
+                  {item.isHighlight === "true" && (
+                    <View style={[styles.highlightTag, { backgroundColor: colors.accentDim }]}>
+                      <Feather name="star" size={9} color={colors.accent} />
+                      <Text style={[styles.highlightTagText, { color: colors.accent, fontFamily: "Inter_600SemiBold" }]}>Highlight</Text>
+                    </View>
+                  )}
+                  <View style={styles.portfolioCardTop}>
+                    <View style={[styles.jobTypePill, { backgroundColor: colors.primaryDim, borderRadius: 4 }]}>
+                      <Text style={[styles.jobTypeText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                        {JOB_TYPE_LABELS[item.jobType] ?? item.jobType}
+                      </Text>
+                    </View>
+                    {item.shootDate && (
+                      <Text style={[styles.portfolioDate, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                        {item.shootDate}
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={[styles.portfolioTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                    {item.title}
+                  </Text>
+                  {item.brandCredit && (
+                    <Text style={[styles.portfolioCredit, { color: colors.accent, fontFamily: "Inter_500Medium" }]}>
+                      {item.brandCredit}{item.agencyCredit ? ` · ${item.agencyCredit}` : ""}
+                    </Text>
+                  )}
+                  {item.description && (
+                    <Text style={[styles.portfolioDesc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={3}>
+                      {item.description}
+                    </Text>
+                  )}
+                  {item.imageUrl && (
+                    <TouchableOpacity
+                      style={[styles.portfolioLink, { borderColor: colors.border, borderRadius: 8 }]}
+                      activeOpacity={0.8}
+                      onPress={() => Haptics.selectionAsync()}
+                    >
+                      <Feather name="external-link" size={12} color={colors.mutedForeground} />
+                      <Text style={[styles.portfolioLinkText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                        View work
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+          </View>
+        )}
+
+        {/* Reviews */}
+        <View style={styles.section}>
+          <View style={styles.reviewsHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Reviews</Text>
+            {ratingSummary && ratingSummary.count > 0 && (
+              <View style={styles.avgRow}>
+                <Feather name="star" size={13} color={colors.accent} />
+                <Text style={[styles.avgScore, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>
+                  {ratingSummary.averageScore?.toFixed(1)}
+                </Text>
+                <Text style={[styles.avgCount, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  ({ratingSummary.count})
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {ratingSummary && ratingSummary.ratings.length > 0 ? (
+            ratingSummary.ratings.slice(0, 5).map((r) => (
+              <View
+                key={r.id}
+                style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}
+              >
+                <View style={styles.reviewTop}>
+                  <View style={styles.reviewStars}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Feather key={s} name="star" size={11} color={s <= r.score ? colors.accent : colors.dim} />
+                    ))}
+                  </View>
+                  <Text style={[styles.reviewMeta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                    {r.reviewerName ?? "Anonymous"}
+                  </Text>
+                </View>
+                {r.comment ? (
+                  <Text style={[styles.reviewComment, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                    {r.comment}
+                  </Text>
+                ) : null}
+              </View>
+            ))
+          ) : (
+            <Text style={[styles.noReviews, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              No reviews yet — be the first.
+            </Text>
+          )}
+        </View>
       </ScrollView>
+
+      {/* Rating submission modal */}
+      <Modal visible={showRatingModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.card, borderRadius: colors.radius + 4 }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity onPress={() => { setShowRatingModal(false); setPendingScore(0); setPendingComment(""); }}>
+                <Text style={[styles.modalCancel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+                Rate {talent.name.split(" ")[0]}
+              </Text>
+              <TouchableOpacity onPress={handleSubmitRating} disabled={submittingRating || pendingScore === 0}>
+                <Text style={[styles.modalDone, { color: pendingScore > 0 ? colors.primary : colors.dim, fontFamily: "Inter_700Bold" }]}>
+                  {submittingRating ? "..." : "Submit"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              <View style={styles.starPicker}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    onPress={() => { Haptics.selectionAsync(); setPendingScore(s); }}
+                    activeOpacity={0.7}
+                    style={styles.starBtn}
+                  >
+                    <Feather name="star" size={36} color={s <= pendingScore ? colors.accent : colors.dim} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={[styles.starLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                {pendingScore === 0 ? "Tap a star to rate" : ["", "Poor", "Fair", "Good", "Great", "Excellent"][pendingScore]}
+              </Text>
+              <View style={[styles.commentWrap, { borderColor: colors.border, backgroundColor: colors.background, borderRadius: colors.radius }]}>
+                <TextInput
+                  value={pendingComment}
+                  onChangeText={setPendingComment}
+                  placeholder="Leave a comment (optional)"
+                  placeholderTextColor={colors.dim}
+                  multiline
+                  style={[styles.commentInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Bottom CTA */}
       <View
@@ -383,6 +643,13 @@ export default function TalentDetailScreen() {
           activeOpacity={0.82}
         >
           <Feather name="message-circle" size={18} color={accentColor} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.messageBtn, { borderColor: colors.accent, borderRadius: colors.radius, backgroundColor: colors.accentDim }]}
+          onPress={() => { Haptics.selectionAsync(); setShowRatingModal(true); }}
+          activeOpacity={0.82}
+        >
+          <Feather name="star" size={18} color={colors.accent} />
         </TouchableOpacity>
       </View>
     </View>
@@ -457,6 +724,45 @@ const styles = StyleSheet.create({
   collabRole: { fontSize: 12 },
   collabJobs: { paddingHorizontal: 8, paddingVertical: 4 },
   collabJobsText: { fontSize: 11 },
+  reviewsHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  avgRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  avgScore: { fontSize: 14 },
+  avgCount: { fontSize: 13 },
+  reviewCard: { padding: 12, borderWidth: 1, gap: 6 },
+  reviewTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  reviewStars: { flexDirection: "row", gap: 2 },
+  reviewMeta: { fontSize: 11 },
+  reviewComment: { fontSize: 13, lineHeight: 18 },
+  noReviews: { fontSize: 13 },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 6, marginRight: 8 },
+  filterChipText: { fontSize: 12 },
+  portfolioCard: { borderWidth: 1, padding: 14, gap: 8 },
+  highlightTag: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
+  highlightTagText: { fontSize: 10 },
+  portfolioCardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  jobTypePill: { paddingHorizontal: 8, paddingVertical: 3 },
+  jobTypeText: { fontSize: 11 },
+  portfolioDate: { fontSize: 11 },
+  portfolioTitle: { fontSize: 14, letterSpacing: -0.2 },
+  portfolioCredit: { fontSize: 12 },
+  portfolioDesc: { fontSize: 12, lineHeight: 17 },
+  portfolioLink: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, alignSelf: "flex-start" },
+  portfolioLinkText: { fontSize: 12 },
+  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" },
+  modalSheet: { paddingBottom: 32, overflow: "hidden" },
+  modalHeader: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1,
+  },
+  modalCancel: { fontSize: 15 },
+  modalTitle: { fontSize: 16 },
+  modalDone: { fontSize: 15 },
+  modalBody: { padding: 24, gap: 16, alignItems: "center" },
+  starPicker: { flexDirection: "row", gap: 12 },
+  starBtn: { padding: 4 },
+  starLabel: { fontSize: 14, height: 20 },
+  commentWrap: { width: "100%", borderWidth: 1.5, minHeight: 80, padding: 12 },
+  commentInput: { fontSize: 14, textAlignVertical: "top" as const },
   bottomBar: { flexDirection: "row", gap: 10, borderTopWidth: 1 },
   bookBtn: { height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   bookBtnText: { fontSize: 16 },

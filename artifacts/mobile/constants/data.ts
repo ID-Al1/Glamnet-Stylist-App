@@ -1,5 +1,5 @@
 export type TalentType = "model" | "artist";
-export type ArtistCategory = "makeup" | "hair" | "nails" | "lash" | "photographer" | "stylist";
+export type ArtistCategory = "makeup" | "hair" | "nails" | "lash" | "barber" | "photographer" | "stylist";
 export type Province = "GP" | "WC" | "KZN" | "GP/WC" | "EC" | "FS" | "NW" | "MP" | "LP" | "NC";
 
 export interface ArtistSettings {
@@ -33,6 +33,7 @@ export interface Talent {
   tier: "New" | "Active" | "Rising" | "Pro" | "Elite";
   available: boolean;
   verified: boolean;
+  foundingMember: boolean;
   badges: string[];
   location: string;
   province: Province;
@@ -69,6 +70,7 @@ export const TALENT_CATEGORIES = [
   { id: "hair", label: "Hair" },
   { id: "nails", label: "Nails" },
   { id: "lash", label: "Lash & Brow" },
+  { id: "barber", label: "Barber" },
   { id: "photographer", label: "Photography" },
   { id: "stylist", label: "Stylist" },
   { id: "model", label: "Models" },
@@ -106,6 +108,7 @@ export const ALL_TALENT: Talent[] = [
     tier: "Elite",
     available: true,
     verified: true,
+    foundingMember: false,
     badges: ["Editorial Pick", "Campaign Ready"],
     location: "Johannesburg",
     province: "GP",
@@ -139,6 +142,7 @@ export const ALL_TALENT: Talent[] = [
     tier: "Pro",
     available: true,
     verified: true,
+    foundingMember: false,
     badges: ["Runway Specialist"],
     location: "Cape Town",
     province: "WC",
@@ -172,6 +176,7 @@ export const ALL_TALENT: Talent[] = [
     tier: "Rising",
     available: false,
     verified: true,
+    foundingMember: false,
     badges: ["Campaign Ready"],
     location: "Durban",
     province: "KZN",
@@ -202,6 +207,7 @@ export const ALL_TALENT: Talent[] = [
     tier: "New",
     available: true,
     verified: false,
+    foundingMember: false,
     badges: ["New Face"],
     location: "Pretoria",
     province: "GP",
@@ -232,6 +238,7 @@ export const ALL_TALENT: Talent[] = [
     tier: "Elite",
     available: true,
     verified: true,
+    foundingMember: false,
     badges: ["Editorial Pick", "Top Rated"],
     location: "Johannesburg",
     province: "GP",
@@ -260,6 +267,7 @@ export const ALL_TALENT: Talent[] = [
     tier: "Pro",
     available: true,
     verified: true,
+    foundingMember: false,
     badges: ["Campaign Ready"],
     location: "Johannesburg",
     province: "GP",
@@ -285,6 +293,7 @@ export const ALL_TALENT: Talent[] = [
     tier: "Pro",
     available: false,
     verified: true,
+    foundingMember: false,
     badges: ["Specialist"],
     location: "Cape Town",
     province: "WC",
@@ -310,6 +319,7 @@ export const ALL_TALENT: Talent[] = [
     tier: "Elite",
     available: true,
     verified: true,
+    foundingMember: false,
     badges: ["Editorial Pick", "Natural Hair Expert"],
     location: "Johannesburg",
     province: "GP",
@@ -338,6 +348,7 @@ export const ALL_TALENT: Talent[] = [
     tier: "Rising",
     available: true,
     verified: false,
+    foundingMember: false,
     badges: ["Rising Star"],
     location: "Durban",
     province: "KZN",
@@ -363,6 +374,7 @@ export const ALL_TALENT: Talent[] = [
     tier: "Elite",
     available: true,
     verified: true,
+    foundingMember: false,
     badges: ["Editorial Pick", "Campaign Ready"],
     location: "Cape Town",
     province: "WC",
@@ -391,6 +403,7 @@ export const ALL_TALENT: Talent[] = [
     tier: "Pro",
     available: false,
     verified: true,
+    foundingMember: false,
     badges: ["Colour Expert"],
     location: "Johannesburg",
     province: "GP",
@@ -410,6 +423,7 @@ export const TEAM_ROLES = [
   { role: "Hair Stylist", cat: "hair" },
   { role: "Nail Technician", cat: "nails" },
   { role: "Lash Tech", cat: "lash" },
+  { role: "Barber", cat: "barber" },
   { role: "Stylist", cat: "stylist" },
 ];
 

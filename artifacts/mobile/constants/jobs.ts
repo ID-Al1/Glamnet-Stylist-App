@@ -1,5 +1,5 @@
 export type JobType = "Editorial" | "Commercial" | "TV/Film" | "Events" | "Bridal" | "Social Media";
-export type JobRole = "MUA" | "Hair" | "Nails" | "Model" | "Photographer" | "Stylist" | "Lash & Brow";
+export type JobRole = "MUA" | "Hair" | "Nails" | "Model" | "Photographer" | "Stylist" | "Lash & Brow" | "Barber";
 
 export interface Job {
   id: string;

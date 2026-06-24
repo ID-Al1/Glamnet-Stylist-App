@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -13,9 +14,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { usePostings, type Applicant } from "@/context/PostingsContext";
+import { useBookings } from "@/context/BookingContext";
 import { useMessaging } from "@/context/MessagingContext";
 import { useColors } from "@/hooks/useColors";
-import { ALL_TALENT } from "@/constants/data";
 
 const TIER_COLORS: Record<string, string> = {
   Elite: "#B8893A",
@@ -42,9 +43,12 @@ export default function CastingApplicantsScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { myPostings, shortlistApplicant, declineApplicant, pendingApplicant } = usePostings();
+  const { createBooking } = useBookings();
   const { getOrCreateThread } = useMessaging();
   const [filter, setFilter] = useState<FilterStatus>("all");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
 
   const paddingTop = insets.top + (Platform.OS === "web" ? 67 : 0);
   const paddingBottom = insets.bottom + (Platform.OS === "web" ? 34 : 0);
@@ -74,15 +78,14 @@ export default function CastingApplicantsScreen() {
   const visible =
     filter === "all" ? job.applicants : job.applicants.filter((a) => a.status === filter);
 
-  const handleMessage = (applicant: Applicant) => {
+  const handleMessage = async (applicant: Applicant) => {
     Haptics.selectionAsync();
-    const talent = ALL_TALENT.find((t) => t.id === applicant.talentId);
-    const threadId = getOrCreateThread(
+    const threadId = await getOrCreateThread(
       applicant.talentId,
       applicant.name,
       applicant.specialty,
       applicant.handle,
-      talent?.type ?? "artist"
+      "artist"
     );
     router.push(`/messages/${threadId}`);
   };
@@ -102,6 +105,28 @@ export default function CastingApplicantsScreen() {
       pendingApplicant(job.id, applicant.id);
     } else {
       declineApplicant(job.id, applicant.id);
+    }
+  };
+
+  const handleConfirmHire = async (applicant: Applicant) => {
+    if (!job || confirmingId) return;
+    setConfirmingId(applicant.id);
+    try {
+      await createBooking({
+        talentId: applicant.talentId,
+        jobType: job.type,
+        date: job.date,
+        location: job.city,
+        isHouseCall: false,
+        notes: `Casting: ${job.title}`,
+        totalCost: job.rateNum,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setConfirmedIds((prev) => new Set(prev).add(applicant.id));
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setConfirmingId(null);
     }
   };
 
@@ -125,7 +150,7 @@ export default function CastingApplicantsScreen() {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text
-            style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}
+            style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}
             numberOfLines={1}
           >
             {job.title}
@@ -439,6 +464,51 @@ export default function CastingApplicantsScreen() {
                       </TouchableOpacity>
                     </View>
 
+                    {/* Confirm booking — only for shortlisted applicants */}
+                    {applicant.status === "shortlisted" && (
+                      <TouchableOpacity
+                        onPress={() => handleConfirmHire(applicant)}
+                        disabled={confirmedIds.has(applicant.id) || confirmingId === applicant.id}
+                        style={[
+                          styles.confirmBtn,
+                          {
+                            backgroundColor: confirmedIds.has(applicant.id)
+                              ? colors.greenDim
+                              : colors.accent,
+                            borderRadius: colors.radius,
+                            borderColor: confirmedIds.has(applicant.id)
+                              ? colors.green + "40"
+                              : "transparent",
+                            borderWidth: 1,
+                          },
+                        ]}
+                        activeOpacity={0.82}
+                      >
+                        {confirmingId === applicant.id ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <>
+                            <Feather
+                              name={confirmedIds.has(applicant.id) ? "check-circle" : "send"}
+                              size={14}
+                              color={confirmedIds.has(applicant.id) ? colors.green : "#fff"}
+                            />
+                            <Text
+                              style={[
+                                styles.confirmBtnText,
+                                {
+                                  color: confirmedIds.has(applicant.id) ? colors.green : "#fff",
+                                  fontFamily: "Inter_700Bold",
+                                },
+                              ]}
+                            >
+                              {confirmedIds.has(applicant.id) ? "Booking Sent" : "Confirm Booking"}
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
                     {/* View profile link */}
                     <TouchableOpacity
                       onPress={() => {
@@ -529,6 +599,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionBtnText: { fontSize: 12 },
+  confirmBtn: {
+    height: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  confirmBtnText: { fontSize: 13 },
   profileLink: { alignItems: "center", paddingVertical: 4 },
   profileLinkText: { fontSize: 13 },
 });

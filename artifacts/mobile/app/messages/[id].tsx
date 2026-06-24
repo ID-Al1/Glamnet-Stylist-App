@@ -14,9 +14,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ALL_TALENT } from "@/constants/data";
+import { useAuth } from "@/context/AuthContext";
 import { useMessaging } from "@/context/MessagingContext";
 import { useColors } from "@/hooks/useColors";
+import { useTalent } from "@/context/TalentContext";
 
 function formatTime(ts: number): string {
   const d = new Date(ts);
@@ -51,20 +52,13 @@ const QUICK_REPLIES = [
   "Let's confirm by Friday.",
 ];
 
-const AUTO_REPLIES: Record<string, string[]> = {
-  default: [
-    "That works for me! Let me check my schedule.",
-    "Thanks for reaching out! Happy to discuss further.",
-    "Sounds exciting — tell me more about the brief.",
-    "I can do that. What's the vibe for the shoot?",
-  ],
-};
 
 export default function ChatScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { threads, messages, sendMessage, receiveMessage, markThreadRead } = useMessaging();
+  const { user } = useAuth();
+  const { threads, messages, sendMessage, loadMessages, markThreadRead } = useMessaging();
   const [input, setInput] = useState("");
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const listRef = useRef<FlatList>(null);
@@ -74,11 +68,14 @@ export default function ChatScreen() {
 
   const thread = threads.find((t) => t.id === id);
   const msgs = messages[id ?? ""] ?? [];
-  const talent = ALL_TALENT.find((t) => t.id === thread?.participantId);
+  const { talent: allTalent } = useTalent();
+  const talent = allTalent.find((t) => t.id === thread?.participantId);
 
   useEffect(() => {
-    if (id) markThreadRead(id);
-  }, [id, markThreadRead]);
+    if (!id) return;
+    loadMessages(id);
+    markThreadRead(id);
+  }, [id, loadMessages, markThreadRead]);
 
   useEffect(() => {
     setTimeout(() => {
@@ -113,14 +110,6 @@ export default function ChatScreen() {
     sendMessage(id!, text);
     setInput("");
     setShowQuickReplies(false);
-
-    // Simulate incoming reply after a delay — use receiveMessage so it appears on the correct side
-    const delay = 1500 + Math.random() * 2000;
-    setTimeout(() => {
-      const replies = AUTO_REPLIES.default;
-      const reply = replies[Math.floor(Math.random() * replies.length)];
-      receiveMessage(id!, thread.participantId, reply);
-    }, delay);
   };
 
   const handleQuickReply = (text: string) => {
@@ -164,7 +153,7 @@ export default function ChatScreen() {
     }
 
     const { msg } = item;
-    const isMe = msg.senderId === "me";
+    const isMe = msg.senderId === user?.id;
     const displayText = msg.text;
 
     return (

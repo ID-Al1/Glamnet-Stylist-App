@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useState } from "react";
 import {
+  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -83,7 +84,7 @@ export default function SignInScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.titleBlock}>
-          <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+          <Text style={[styles.title, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
             Welcome back
           </Text>
           <Text style={[styles.sub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -141,7 +142,17 @@ export default function SignInScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.forgotBtn} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.forgotBtn}
+            activeOpacity={0.7}
+            onPress={() =>
+              Alert.alert(
+                "Reset Password",
+                "Email support@glamnet.co.za with your registered email address and we'll send you a reset link.",
+                [{ text: "OK" }]
+              )
+            }
+          >
             <Text style={[styles.forgotText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
               Forgot password?
             </Text>

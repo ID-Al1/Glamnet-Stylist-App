@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useReducer,
 } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { apiFetch } from "@/lib/api";
 import type { Job, JobRole, JobType } from "@/constants/jobs";
 
 export interface Applicant {
@@ -21,61 +21,12 @@ export interface Applicant {
   message: string;
   appliedAt: number;
   status: "pending" | "shortlisted" | "declined";
+  avatarUrl?: string | null;
 }
 
 export interface PostedJob extends Job {
   postedByMe: true;
   applicants: Applicant[];
-}
-
-type State = PostedJob[];
-
-type Action =
-  | { type: "LOAD"; payload: State }
-  | { type: "ADD"; job: PostedJob }
-  | { type: "REMOVE"; jobId: string }
-  | { type: "ADD_APPLICANT"; jobId: string; applicant: Applicant }
-  | { type: "SET_APPLICANT_STATUS"; jobId: string; applicantId: string; status: Applicant["status"] };
-
-function reducer(state: State, action: Action): State {
-  switch (action.type) {
-    case "LOAD":
-      return action.payload;
-    case "ADD":
-      return [action.job, ...state];
-    case "REMOVE":
-      return state.filter((j) => j.id !== action.jobId);
-    case "ADD_APPLICANT":
-      return state.map((j) =>
-        j.id === action.jobId
-          ? { ...j, applicants: [...j.applicants, action.applicant] }
-          : j
-      );
-    case "SET_APPLICANT_STATUS":
-      return state.map((j) =>
-        j.id === action.jobId
-          ? {
-              ...j,
-              applicants: j.applicants.map((a) =>
-                a.id === action.applicantId ? { ...a, status: action.status } : a
-              ),
-            }
-          : j
-      );
-    default:
-      return state;
-  }
-}
-
-interface PostingsContextType {
-  myPostings: PostedJob[];
-  addPosting: (draft: PostingDraft) => void;
-  removePosting: (jobId: string) => void;
-  shortlistApplicant: (jobId: string, applicantId: string) => void;
-  declineApplicant: (jobId: string, applicantId: string) => void;
-  pendingApplicant: (jobId: string, applicantId: string) => void;
-  totalApplicants: number;
-  totalPending: number;
 }
 
 export interface PostingDraft {
@@ -97,128 +48,164 @@ export interface PostingDraft {
   tags: string[];
 }
 
-const MOCK_APPLICANT_POOL: Omit<Applicant, "id" | "role" | "message" | "appliedAt" | "status">[] = [
-  { talentId: "a1", name: "Lerato Dlamini", handle: "@lerato_mua", specialty: "Bridal & Editorial MUA", location: "Johannesburg, GP", repScore: 94, tier: "Elite" },
-  { talentId: "a2", name: "Amara Osei", handle: "@amara_nails", specialty: "Luxury Nail Artist", location: "Cape Town, WC", repScore: 88, tier: "Pro" },
-  { talentId: "a3", name: "Kefilwe Ntuli", handle: "@kefilwe.beauty", specialty: "Afro & Textured Hair", location: "Johannesburg, GP", repScore: 79, tier: "Rising" },
-  { talentId: "a4", name: "Zintle Xaba", handle: "@zintle_hair", specialty: "Natural Hair Specialist", location: "Durban, KZN", repScore: 85, tier: "Pro" },
-  { talentId: "a5", name: "Thandi Mokoena", handle: "@thandi.lash", specialty: "Lash & Brow Specialist", location: "Pretoria, GP", repScore: 72, tier: "Active" },
-  { talentId: "a6", name: "Sipho Dlamini", handle: "@sipho.photo", specialty: "Campaign Photographer", location: "Cape Town, WC", repScore: 91, tier: "Elite" },
-  { talentId: "a7", name: "Nomsa Mahlangu", handle: "@nomsa.style", specialty: "Fashion Stylist", location: "Johannesburg, GP", repScore: 83, tier: "Pro" },
-  { talentId: "m1", name: "Naledi Dube", handle: "@naledi.model", specialty: "Commercial & Editorial", location: "Johannesburg, GP", repScore: 96, tier: "Elite" },
-  { talentId: "m2", name: "Precious Sithole", handle: "@precious.model", specialty: "Fashion & Runway", location: "Cape Town, WC", repScore: 81, tier: "Pro" },
-  { talentId: "m3", name: "Ayanda Mthembu", handle: "@ayanda.creative", specialty: "Creative & Editorial", location: "Durban, KZN", repScore: 77, tier: "Rising" },
-];
+type State = {
+  myPostings: PostedJob[];
+  isLoading: boolean;
+};
 
-const INTRO_MESSAGES = [
-  "Hi! I'd love to be part of this project. My portfolio includes similar work and I'm available on the listed dates.",
-  "This brief speaks directly to my work. I have strong experience in this category and would love to discuss further.",
-  "I've worked on similar campaigns and believe I'd bring great value to this project. Happy to share my full portfolio.",
-  "Very excited about this opportunity! I have the look and skill set you're describing. Available on the shoot dates.",
-  "This is exactly the type of project I specialise in. Would love to be considered — I can provide references too.",
-];
+type Action =
+  | { type: "LOAD"; payload: PostedJob[] }
+  | { type: "ADD"; job: PostedJob }
+  | { type: "REMOVE"; jobId: string }
+  | { type: "SET_APPLICANT_STATUS"; jobId: string; applicantId: string; status: Applicant["status"] }
+  | { type: "SET_LOADING"; value: boolean };
 
-const STORAGE_KEY = "@glamnet_postings_v2";
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case "LOAD":
+      return { ...state, myPostings: action.payload, isLoading: false };
+    case "ADD":
+      return { ...state, myPostings: [action.job, ...state.myPostings] };
+    case "REMOVE":
+      return { ...state, myPostings: state.myPostings.filter((j) => j.id !== action.jobId) };
+    case "SET_APPLICANT_STATUS":
+      return {
+        ...state,
+        myPostings: state.myPostings.map((j) =>
+          j.id === action.jobId
+            ? {
+                ...j,
+                applicants: j.applicants.map((a) =>
+                  a.id === action.applicantId ? { ...a, status: action.status } : a
+                ),
+              }
+            : j
+        ),
+      };
+    case "SET_LOADING":
+      return { ...state, isLoading: action.value };
+    default:
+      return state;
+  }
+}
+
+interface PostingsContextType {
+  myPostings: PostedJob[];
+  isLoading: boolean;
+  refresh: () => Promise<void>;
+  addPosting: (draft: PostingDraft) => Promise<void>;
+  removePosting: (jobId: string) => Promise<void>;
+  shortlistApplicant: (jobId: string, applicantId: string) => Promise<void>;
+  declineApplicant: (jobId: string, applicantId: string) => Promise<void>;
+  pendingApplicant: (jobId: string, applicantId: string) => Promise<void>;
+  totalApplicants: number;
+  totalPending: number;
+}
 
 const PostingsContext = createContext<PostingsContextType | null>(null);
 
-function seedApplicants(draft: PostingDraft, jobId: string): Applicant[] {
-  const eligible = MOCK_APPLICANT_POOL.filter((p) =>
-    draft.roles.some((r) =>
-      r === "MUA" ? p.specialty.includes("MUA") || p.specialty.includes("Beauty") :
-      r === "Hair" ? p.specialty.includes("Hair") :
-      r === "Nails" ? p.specialty.includes("Nail") :
-      r === "Model" ? p.specialty.includes("Commercial") || p.specialty.includes("Fashion") || p.specialty.includes("Editorial") || p.specialty.includes("Creative") :
-      r === "Photographer" ? p.specialty.includes("Photographer") :
-      r === "Stylist" ? p.specialty.includes("Stylist") :
-      r === "Lash & Brow" ? p.specialty.includes("Lash") :
-      false
-    )
-  );
+function normaliseJob(raw: Record<string, unknown>): PostedJob {
+  const applicants: Applicant[] = ((raw.applicants as Record<string, unknown>[]) ?? []).map((a) => ({
+    id: a.id as string,
+    talentId: a.talentId as string,
+    name: (a.name ?? "Unknown") as string,
+    handle: (a.handle ?? "") as string,
+    role: a.role as JobRole,
+    specialty: ((a.specialties as string[] | null)?.[0] ?? a.role) as string,
+    location: (a.location ?? "") as string,
+    repScore: (a.repScore ?? 0) as number,
+    tier: (a.tier ?? "New") as string,
+    message: (a.message ?? "") as string,
+    appliedAt: a.appliedAt ? new Date(a.appliedAt as string).getTime() : Date.now(),
+    status: (a.status ?? "pending") as Applicant["status"],
+    avatarUrl: (a.avatarUrl ?? null) as string | null,
+  }));
 
-  const count = Math.max(1, Math.min(eligible.length, 2 + Math.floor(Math.random() * 3)));
-  const selected = [...eligible].sort(() => Math.random() - 0.5).slice(0, count);
-
-  return selected.map((p, i) => {
-    const matchingRole = draft.roles.find((r) =>
-      r === "MUA" ? p.specialty.includes("MUA") || p.specialty.includes("Beauty") :
-      r === "Hair" ? p.specialty.includes("Hair") :
-      r === "Nails" ? p.specialty.includes("Nail") :
-      r === "Model" ? ["Commercial", "Fashion", "Editorial", "Creative"].some((s) => p.specialty.includes(s)) :
-      r === "Photographer" ? p.specialty.includes("Photographer") :
-      r === "Stylist" ? p.specialty.includes("Stylist") :
-      r === "Lash & Brow" ? p.specialty.includes("Lash") :
-      false
-    ) ?? draft.roles[0];
-
-    return {
-      id: `${jobId}_app_${p.talentId}_${i}`,
-      talentId: p.talentId,
-      name: p.name,
-      handle: p.handle,
-      role: matchingRole,
-      specialty: p.specialty,
-      location: p.location,
-      repScore: p.repScore,
-      tier: p.tier,
-      message: INTRO_MESSAGES[i % INTRO_MESSAGES.length],
-      appliedAt: Date.now() - Math.floor(Math.random() * 1000 * 60 * 60 * 4),
-      status: "pending" as const,
-    };
-  });
+  return {
+    id: raw.id as string,
+    title: raw.title as string,
+    client: raw.client as string,
+    clientType: (raw.clientType ?? "Brand") as PostingDraft["clientType"],
+    brief: (raw.brief ?? "") as string,
+    type: raw.type as JobType,
+    province: (raw.province ?? "") as string,
+    city: (raw.city ?? "") as string,
+    date: (raw.date ?? "") as string,
+    deadline: (raw.deadline ?? "") as string,
+    rate: (raw.rate ?? "") as string,
+    rateNum: (raw.rateNum ?? 0) as number,
+    urgent: (raw.urgent ?? false) as boolean,
+    featured: (raw.featured ?? false) as boolean,
+    roles: (raw.roles ?? []) as JobRole[],
+    spotsTotal: (raw.spotsTotal ?? 1) as number,
+    spotsFilled: (raw.spotsFilled ?? 0) as number,
+    requirements: (raw.requirements ?? []) as string[],
+    tags: (raw.tags ?? []) as string[],
+    posted: raw.createdAt
+      ? new Date(raw.createdAt as string).toLocaleDateString()
+      : "Recently",
+    postedByMe: true,
+    applicants,
+  };
 }
 
 export function PostingsProvider({ children }: { children: React.ReactNode }) {
-  const [myPostings, dispatch] = useReducer(reducer, []);
+  const [state, dispatch] = useReducer(reducer, { myPostings: [], isLoading: true });
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) dispatch({ type: "LOAD", payload: JSON.parse(raw) });
-      } catch {
-        /* keep empty */
-      }
-    })();
+  const refresh = useCallback(async () => {
+    try {
+      const { jobs } = await apiFetch<{ jobs: Record<string, unknown>[] }>("/jobs/mine");
+      dispatch({ type: "LOAD", payload: jobs.map(normaliseJob) });
+    } catch {
+      dispatch({ type: "SET_LOADING", value: false });
+    }
   }, []);
 
   useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(myPostings)).catch(() => {});
-  }, [myPostings]);
+    refresh();
+  }, [refresh]);
 
-  const addPosting = useCallback((draft: PostingDraft) => {
-    const jobId = `user_${Date.now()}`;
-    const applicants = seedApplicants(draft, jobId);
-    const job: PostedJob = {
-      ...draft,
-      id: jobId,
-      featured: false,
-      spotsFilled: 0,
-      posted: "Just now",
-      postedByMe: true,
-      applicants,
-    };
-    dispatch({ type: "ADD", job });
+  const addPosting = useCallback(async (draft: PostingDraft) => {
+    const { job } = await apiFetch<{ job: Record<string, unknown> }>("/jobs", {
+      method: "POST",
+      body: draft,
+    });
+    dispatch({ type: "ADD", job: normaliseJob({ ...job, applicants: [] }) });
   }, []);
 
-  const removePosting = useCallback((jobId: string) => {
+  const removePosting = useCallback(async (jobId: string) => {
+    await apiFetch(`/jobs/${jobId}`, { method: "DELETE" });
     dispatch({ type: "REMOVE", jobId });
   }, []);
 
-  const shortlistApplicant = useCallback((jobId: string, applicantId: string) => {
-    dispatch({ type: "SET_APPLICANT_STATUS", jobId, applicantId, status: "shortlisted" });
-  }, []);
+  const setApplicantStatus = useCallback(
+    async (jobId: string, applicantId: string, status: Applicant["status"]) => {
+      await apiFetch(`/jobs/${jobId}/applications/${applicantId}/status`, {
+        method: "PATCH",
+        body: { status },
+      });
+      dispatch({ type: "SET_APPLICANT_STATUS", jobId, applicantId, status });
+    },
+    []
+  );
 
-  const declineApplicant = useCallback((jobId: string, applicantId: string) => {
-    dispatch({ type: "SET_APPLICANT_STATUS", jobId, applicantId, status: "declined" });
-  }, []);
+  const shortlistApplicant = useCallback(
+    (jobId: string, applicantId: string) => setApplicantStatus(jobId, applicantId, "shortlisted"),
+    [setApplicantStatus]
+  );
 
-  const pendingApplicant = useCallback((jobId: string, applicantId: string) => {
-    dispatch({ type: "SET_APPLICANT_STATUS", jobId, applicantId, status: "pending" });
-  }, []);
+  const declineApplicant = useCallback(
+    (jobId: string, applicantId: string) => setApplicantStatus(jobId, applicantId, "declined"),
+    [setApplicantStatus]
+  );
 
-  const totalApplicants = myPostings.reduce((sum, j) => sum + j.applicants.length, 0);
-  const totalPending = myPostings.reduce(
+  const pendingApplicant = useCallback(
+    (jobId: string, applicantId: string) => setApplicantStatus(jobId, applicantId, "pending"),
+    [setApplicantStatus]
+  );
+
+  const totalApplicants = state.myPostings.reduce((sum, j) => sum + j.applicants.length, 0);
+  const totalPending = state.myPostings.reduce(
     (sum, j) => sum + j.applicants.filter((a) => a.status === "pending").length,
     0
   );
@@ -226,7 +213,9 @@ export function PostingsProvider({ children }: { children: React.ReactNode }) {
   return (
     <PostingsContext.Provider
       value={{
-        myPostings,
+        myPostings: state.myPostings,
+        isLoading: state.isLoading,
+        refresh,
         addPosting,
         removePosting,
         shortlistApplicant,

@@ -5,10 +5,11 @@ import React, {
   useEffect,
   useReducer,
 } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { apiFetch } from "@/lib/api";
 import type { JobRole } from "@/constants/jobs";
 
 export interface Application {
+  id: string;
   jobId: string;
   role: JobRole;
   message: string;
@@ -16,6 +17,7 @@ export interface Application {
   status: "pending" | "shortlisted" | "declined";
 }
 
+// keyed by jobId for quick lookup
 type State = Record<string, Application>;
 
 type Action =
@@ -41,42 +43,45 @@ function reducer(state: State, action: Action): State {
 
 interface ApplicationsContextType {
   applications: State;
-  apply: (jobId: string, role: JobRole, message: string) => void;
-  withdraw: (jobId: string) => void;
+  apply: (jobId: string, role: JobRole, message: string) => Promise<void>;
+  withdraw: (jobId: string) => Promise<void>;
   hasApplied: (jobId: string) => boolean;
   getApplication: (jobId: string) => Application | undefined;
   totalApplied: number;
 }
 
 const ApplicationsContext = createContext<ApplicationsContextType | null>(null);
-const STORAGE_KEY = "@glamnet_applications";
 
 export function ApplicationsProvider({ children }: { children: React.ReactNode }) {
   const [applications, dispatch] = useReducer(reducer, {});
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) dispatch({ type: "LOAD", payload: JSON.parse(raw) });
-      } catch {
-        /* keep empty */
-      }
-    })();
-  }, []);
+  // No persistent local cache needed — state is in the database.
+  // We keep an in-memory map so the UI can react instantly.
 
-  useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(applications)).catch(() => {});
-  }, [applications]);
+  const apply = useCallback(async (jobId: string, role: JobRole, message: string) => {
+    const { application } = await apiFetch<{
+      application: { id: string; jobId: string; role: string; message: string; appliedAt: string; status: string };
+    }>(`/jobs/${jobId}/apply`, {
+      method: "POST",
+      body: { role, message },
+    });
 
-  const apply = useCallback((jobId: string, role: JobRole, message: string) => {
     dispatch({
       type: "APPLY",
-      application: { jobId, role, message, appliedAt: Date.now(), status: "pending" },
+      application: {
+        id: application.id,
+        jobId: application.jobId,
+        role: application.role as JobRole,
+        message: application.message,
+        appliedAt: new Date(application.appliedAt).getTime(),
+        status: application.status as Application["status"],
+      },
     });
   }, []);
 
-  const withdraw = useCallback((jobId: string) => {
+  // The API doesn't have a withdraw endpoint yet — remove locally only.
+  // If you add DELETE /api/jobs/:id/apply later, call it here first.
+  const withdraw = useCallback(async (jobId: string) => {
     dispatch({ type: "WITHDRAW", jobId });
   }, []);
 

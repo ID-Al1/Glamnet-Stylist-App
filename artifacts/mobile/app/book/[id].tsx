@@ -13,9 +13,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ALL_TALENT } from "@/constants/data";
 import { useColors } from "@/hooks/useColors";
+import { useBookings } from "@/context/BookingContext";
 import { useNotifications } from "@/context/NotificationsContext";
+import { useTalent } from "@/context/TalentContext";
+import { DateTimeInput } from "@/components/DateTimeInput";
+import { LocationInput } from "@/components/LocationInput";
 
 const JOB_TYPES = ["Bridal", "Editorial", "Events", "Commercial", "TV/Film", "Fashion Week", "Personal", "Other"];
 
@@ -26,17 +29,26 @@ export default function BookScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { notifications } = useNotifications();
+  const { talent: allTalent } = useTalent();
+  const { createBooking } = useBookings();
 
-  const talent = ALL_TALENT.find((t) => t.id === id);
+  const talent = allTalent.find((t) => t.id === id);
 
   const [step, setStep] = useState(0);
   const [jobType, setJobType] = useState("");
-  const [date, setDate] = useState("");
+  const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
   const [location, setLocation] = useState("");
   const [isHouseCall, setIsHouseCall] = useState(false);
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [booked, setBooked] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const formattedDate = selectedDateTime
+    ? selectedDateTime.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "long", year: "numeric" }) +
+      " at " +
+      selectedDateTime.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit", hour12: false })
+    : "";
 
   const paddingTop = insets.top + (Platform.OS === "web" ? 67 : 16);
   const paddingBottom = insets.bottom + (Platform.OS === "web" ? 34 : 16);
@@ -59,21 +71,39 @@ export default function BookScreen() {
     const e: Record<string, string> = {};
     if (step === 0 && !jobType) e.jobType = "Please select a service type";
     if (step === 1) {
-      if (!date.trim()) e.date = "Date is required";
+      if (!selectedDateTime) e.date = "Date & time is required";
       if (!location.trim()) e.location = "Location is required";
     }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!validate()) return;
     if (step < 3) {
       Haptics.selectionAsync();
       setStep((s) => s + 1);
     } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setBooked(true);
+      if (!talent || isSubmitting) return;
+      setIsSubmitting(true);
+      setErrors({});
+      try {
+        await createBooking({
+          talentId: talent.id,
+          jobType,
+          date: formattedDate,
+          location,
+          isHouseCall,
+          notes,
+          totalCost,
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setBooked(true);
+      } catch {
+        setErrors({ submit: "Failed to send booking. Please try again." });
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -83,13 +113,13 @@ export default function BookScreen() {
         <View style={[styles.successIcon, { backgroundColor: colors.greenDim, borderRadius: 40 }]}>
           <Feather name="check-circle" size={52} color={colors.green} />
         </View>
-        <Text style={[styles.successTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+        <Text style={[styles.successTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
           Booking Requested!
         </Text>
         <Text style={[styles.successSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
           Your booking request for{" "}
           <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{talent.name}</Text> on{" "}
-          <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{date}</Text> has been sent.
+          <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{formattedDate}</Text> has been sent.
           {"\n\n"}You'll receive a confirmation notification once accepted.
         </Text>
         <View style={[styles.successCard, { backgroundColor: colors.warm, borderRadius: colors.radius, borderColor: colors.border, borderWidth: 1 }]}>
@@ -103,7 +133,7 @@ export default function BookScreen() {
           </View>
           <View style={styles.successRow}>
             <Text style={[styles.successLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Date</Text>
-            <Text style={[styles.successValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{date}</Text>
+            <Text style={[styles.successValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{formattedDate}</Text>
           </View>
           <View style={styles.successRow}>
             <Text style={[styles.successLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Total</Text>
@@ -250,7 +280,7 @@ export default function BookScreen() {
         {step === 0 && (
           <View style={styles.stepContent}>
             <View style={styles.stepHeader}>
-              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                 What's the occasion?
               </Text>
               <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -345,7 +375,7 @@ export default function BookScreen() {
         {step === 1 && (
           <View style={styles.stepContent}>
             <View style={styles.stepHeader}>
-              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                 Date & location
               </Text>
               <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -356,27 +386,13 @@ export default function BookScreen() {
             <View style={styles.form}>
               <View style={styles.fieldWrap}>
                 <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                  Date *
+                  Date & Time *
                 </Text>
-                <View
-                  style={[
-                    styles.inputWrap,
-                    {
-                      borderColor: errors.date ? colors.destructive : colors.border,
-                      backgroundColor: colors.card,
-                      borderRadius: colors.radius,
-                    },
-                  ]}
-                >
-                  <Feather name="calendar" size={16} color={colors.mutedForeground} />
-                  <TextInput
-                    value={date}
-                    onChangeText={setDate}
-                    placeholder="e.g. June 8, 2026"
-                    placeholderTextColor={colors.dim}
-                    style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
-                  />
-                </View>
+                <DateTimeInput
+                  value={selectedDateTime}
+                  onChange={setSelectedDateTime}
+                  error={errors.date}
+                />
                 {errors.date && (
                   <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
                     {errors.date}
@@ -388,25 +404,12 @@ export default function BookScreen() {
                 <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
                   Location *
                 </Text>
-                <View
-                  style={[
-                    styles.inputWrap,
-                    {
-                      borderColor: errors.location ? colors.destructive : colors.border,
-                      backgroundColor: colors.card,
-                      borderRadius: colors.radius,
-                    },
-                  ]}
-                >
-                  <Feather name="map-pin" size={16} color={colors.mutedForeground} />
-                  <TextInput
-                    value={location}
-                    onChangeText={setLocation}
-                    placeholder={isHouseCall ? "Your address" : "Studio / venue address"}
-                    placeholderTextColor={colors.dim}
-                    style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
-                  />
-                </View>
+                <LocationInput
+                  value={location}
+                  onChange={setLocation}
+                  error={errors.location}
+                  placeholder={isHouseCall ? "Your home address" : "Studio / venue address"}
+                />
                 {errors.location && (
                   <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
                     {errors.location}
@@ -456,7 +459,7 @@ export default function BookScreen() {
         {step === 2 && (
           <View style={styles.stepContent}>
             <View style={styles.stepHeader}>
-              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                 Review booking
               </Text>
               <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -477,7 +480,7 @@ export default function BookScreen() {
               {[
                 { label: "Artist", value: `${talent.name} (${talent.role})` },
                 { label: "Service", value: jobType },
-                { label: "Date", value: date },
+                { label: "Date", value: formattedDate },
                 { label: "Location", value: location },
                 { label: "Booking type", value: isHouseCall ? "House Call" : "Studio / Venue" },
               ].map((row) => (
@@ -593,7 +596,7 @@ export default function BookScreen() {
         {step === 3 && (
           <View style={styles.stepContent}>
             <View style={styles.stepHeader}>
-              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                 Confirm & send
               </Text>
               <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -622,7 +625,7 @@ export default function BookScreen() {
               </Text>
               <View style={[styles.confirmSummary, { backgroundColor: colors.card, borderRadius: colors.radius }]}>
                 <Text style={[styles.confirmSummaryText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                  {jobType} · {date}
+                  {jobType} · {formattedDate}
                 </Text>
                 <Text style={[styles.confirmSummaryRate, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>
                   R{totalCost.toLocaleString()} total
@@ -646,15 +649,21 @@ export default function BookScreen() {
           },
         ]}
       >
+        {errors.submit && (
+          <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_400Regular", textAlign: "center", marginBottom: 8 }]}>
+            {errors.submit}
+          </Text>
+        )}
         <TouchableOpacity
-          style={[styles.nextBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
+          style={[styles.nextBtn, { backgroundColor: isSubmitting ? colors.muted : colors.primary, borderRadius: colors.radius }]}
           onPress={handleNext}
           activeOpacity={0.82}
+          disabled={isSubmitting}
         >
           <Text style={[styles.nextBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
-            {step === 3 ? "Confirm Booking" : "Continue"}
+            {isSubmitting ? "Sending..." : step === 3 ? "Confirm Booking" : "Continue"}
           </Text>
-          <Feather name={step === 3 ? "check" : "arrow-right"} size={18} color="#fff" />
+          {!isSubmitting && <Feather name={step === 3 ? "check" : "arrow-right"} size={18} color="#fff" />}
         </TouchableOpacity>
       </View>
     </View>
@@ -797,6 +806,25 @@ const styles = StyleSheet.create({
   confirmSummary: { width: "100%", padding: 14, alignItems: "center", gap: 4 },
   confirmSummaryText: { fontSize: 14 },
   confirmSummaryRate: { fontSize: 18, letterSpacing: -0.4 },
+  dateOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  dateSheet: {
+    paddingBottom: 32,
+    overflow: "hidden",
+  },
+  dateSheetHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  datePickerBtn: { fontSize: 15 },
+  datePickerTitle: { fontSize: 15 },
   bottomBar: { borderTopWidth: 1 },
   nextBtn: {
     height: 52,

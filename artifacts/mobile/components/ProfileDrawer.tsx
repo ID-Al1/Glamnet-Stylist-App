@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TIER_COLORS } from "@/constants/data";
 import { useAuth } from "@/context/AuthContext";
+import { useNotifications } from "@/context/NotificationsContext";
 import { useColors } from "@/hooks/useColors";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -24,12 +25,15 @@ const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.82, 320);
 interface ProfileDrawerProps {
   visible: boolean;
   onClose: () => void;
+  onFiltersPress?: () => void;
+  onSearchPress?: () => void;
 }
 
-export function ProfileDrawer({ visible, onClose }: ProfileDrawerProps) {
+export function ProfileDrawer({ visible, onClose, onFiltersPress, onSearchPress }: ProfileDrawerProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
+  const { unreadCount } = useNotifications();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
 
@@ -73,6 +77,7 @@ export function ProfileDrawer({ visible, onClose }: ProfileDrawerProps) {
   }, [onClose, signOut]);
 
   const tierColor = user ? (TIER_COLORS[user.tier] ?? colors.mutedForeground) : colors.mutedForeground;
+  const gold = colors.gold;
 
   if (!user) return null;
 
@@ -144,15 +149,84 @@ export function ProfileDrawer({ visible, onClose }: ProfileDrawerProps) {
                   {user.tier}
                 </Text>
               </View>
+              {user.foundingMember && (
+                <View style={[styles.roleBadge, { backgroundColor: gold + "18", borderColor: gold + "50", flexDirection: "row", alignItems: "center", gap: 4 }]}>
+                  <Feather name="award" size={9} color={gold} />
+                  <Text style={[styles.roleBadgeText, { color: gold, fontFamily: "Inter_700Bold" }]}>
+                    Founding
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
+        </View>
+
+        {/* Quick actions strip */}
+        <View style={[styles.quickActions, { borderBottomColor: colors.border }]}>
+          {([
+            {
+              icon: "info" as const,
+              label: "Info",
+              badge: 0,
+              onPress: () => { Haptics.selectionAsync(); onClose(); router.push("/how-it-works"); },
+            },
+            {
+              icon: "sliders" as const,
+              label: "Filters",
+              badge: 0,
+              onPress: () => {
+                Haptics.selectionAsync();
+                onClose();
+                if (onFiltersPress) onFiltersPress();
+                else router.push("/(tabs)" as any);
+              },
+            },
+            {
+              icon: "search" as const,
+              label: "Search",
+              badge: 0,
+              onPress: () => {
+                Haptics.selectionAsync();
+                onClose();
+                if (onSearchPress) onSearchPress();
+                else router.push("/(tabs)" as any);
+              },
+            },
+            {
+              icon: "bell" as const,
+              label: "Alerts",
+              badge: unreadCount,
+              onPress: () => { Haptics.selectionAsync(); onClose(); router.push("/notifications"); },
+            },
+          ] as const).map((qa) => (
+            <TouchableOpacity
+              key={qa.label}
+              style={styles.quickActionBtn}
+              activeOpacity={0.7}
+              onPress={qa.onPress}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: colors.muted, borderRadius: 12 }]}>
+                <Feather name={qa.icon} size={18} color={colors.mutedForeground} />
+                {qa.badge > 0 && (
+                  <View style={[styles.qaBadge, { backgroundColor: colors.primary }]}>
+                    <Text style={[styles.qaBadgeText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                      {qa.badge > 9 ? "9+" : qa.badge}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.quickActionLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                {qa.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* Stats */}
         <View style={[styles.statsRow, { borderBottomColor: colors.border }]}>
           <View style={styles.stat}>
             <Text style={[styles.statNum, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              {user.jobs}
+              {user.jobsCount}
             </Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
               Jobs
@@ -181,7 +255,8 @@ export function ProfileDrawer({ visible, onClose }: ProfileDrawerProps) {
         {/* Nav items */}
         <View style={styles.navItems}>
           {[
-            { icon: "user" as const, label: "My Profile", sub: "View and edit your profile", route: null },
+            { icon: "home" as const, label: "Home", sub: "Your personalised overview", route: "/home" as const },
+          { icon: "user" as const, label: "My Profile", sub: "View and edit your profile", route: "/profile" as const },
             { icon: "settings" as const, label: "Settings", sub: "Account & preferences", route: "/settings" as const },
             { icon: "help-circle" as const, label: "How It Works", sub: "Verification, tiers, rep scores", route: "/how-it-works" as const },
             { icon: "star" as const, label: "Rate the App", sub: "Share your feedback", route: null },
@@ -307,6 +382,38 @@ const styles = StyleSheet.create({
     textTransform: "uppercase" as const,
     letterSpacing: 0.5,
   },
+  quickActions: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  quickActionBtn: {
+    alignItems: "center",
+    gap: 5,
+  },
+  quickActionIcon: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickActionLabel: {
+    fontSize: 10,
+  },
+  qaBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  qaBadgeText: { fontSize: 9 },
   statsRow: {
     flexDirection: "row",
     paddingHorizontal: 20,

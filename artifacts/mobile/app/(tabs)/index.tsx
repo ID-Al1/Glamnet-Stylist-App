@@ -16,8 +16,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TalentCard } from "@/components/TalentCard";
 import { ProfileDrawer } from "@/components/ProfileDrawer";
-import { ALL_TALENT, SA_PROVINCES, TALENT_CATEGORIES, type Talent } from "@/constants/data";
-import { useNotifications } from "@/context/NotificationsContext";
+import { SA_PROVINCES, TALENT_CATEGORIES, type Talent } from "@/constants/data";
+import { useTalent } from "@/context/TalentContext";
 import { useColors } from "@/hooks/useColors";
 
 const MODE_FILTERS = [
@@ -69,7 +69,7 @@ function filterTalent(
 export default function DiscoverScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { unreadCount } = useNotifications();
+  const { talent: allTalent } = useTalent();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState("trending");
@@ -81,7 +81,7 @@ export default function DiscoverScreen() {
 
   const paddingTop = insets.top + (Platform.OS === "web" ? 67 : 0);
 
-  const talent = filterTalent(ALL_TALENT, categoryFilter, modeFilter, province, houseCallsOnly, search);
+  const talent = filterTalent(allTalent, categoryFilter, modeFilter, province, houseCallsOnly, search);
 
   const renderItem = useCallback(
     ({ item }: { item: Talent }) => (
@@ -96,34 +96,10 @@ export default function DiscoverScreen() {
     []
   );
 
-  const currentProvinceName = SA_PROVINCES.find((p) => p.id === province)?.label ?? "All Provinces";
   const hasActiveFilters = province !== "all" || houseCallsOnly || categoryFilter !== "all";
 
   const ListHeader = (
     <View>
-      {/* Hero stats bar */}
-      <View style={[styles.statsBar, { backgroundColor: colors.warm, borderRadius: colors.radius, marginBottom: 16 }]}>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNum, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>247</Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Jobs Created</Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statNum, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>R186K</Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Paid Out</Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statNum, { color: colors.purple, fontFamily: "Inter_700Bold" }]}>{ALL_TALENT.length}</Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Talent</Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statNum, { color: colors.blue, fontFamily: "Inter_700Bold" }]}>9</Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Provinces</Text>
-        </View>
-      </View>
-
       {/* Filter expand panel */}
       {filtersOpen && (
         <View
@@ -137,6 +113,16 @@ export default function DiscoverScreen() {
             },
           ]}
         >
+          {/* Panel header */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={[{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+              Filters
+            </Text>
+            <TouchableOpacity onPress={() => setFiltersOpen(false)} activeOpacity={0.7} style={{ padding: 2 }}>
+              <Feather name="x" size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+
           {/* Province */}
           <View style={styles.filterGroup}>
             <Text style={[styles.filterGroupLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
@@ -350,60 +336,8 @@ export default function DiscoverScreen() {
           </Text>
         </View>
 
-        <View style={styles.headerActions}>
-          {/* How It Works */}
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); router.push("/how-it-works"); }}
-            style={styles.iconBtn}
-            activeOpacity={0.7}
-          >
-            <Feather name="info" size={18} color={colors.mutedForeground} />
-          </TouchableOpacity>
-
-          {/* Filter toggle */}
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); setFiltersOpen((v) => !v); }}
-            style={[
-              styles.iconBtn,
-              hasActiveFilters && { backgroundColor: colors.primaryDim, borderRadius: 8 },
-            ]}
-            activeOpacity={0.7}
-          >
-            <Feather
-              name="sliders"
-              size={18}
-              color={hasActiveFilters ? colors.primary : colors.foreground}
-            />
-            {hasActiveFilters && (
-              <View style={[styles.filterActiveDot, { backgroundColor: colors.primary }]} />
-            )}
-          </TouchableOpacity>
-
-          {/* Search */}
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); setSearchOpen((v) => !v); }}
-            style={styles.iconBtn}
-            activeOpacity={0.7}
-          >
-            <Feather name={searchOpen ? "x" : "search"} size={20} color={colors.foreground} />
-          </TouchableOpacity>
-
-          {/* Notifications bell */}
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); router.push("/notifications"); }}
-            style={[styles.iconBtn, styles.notifBtn]}
-            activeOpacity={0.7}
-          >
-            <Feather name="bell" size={20} color={colors.foreground} />
-            {unreadCount > 0 && (
-              <View style={[styles.notifBadge, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.notifBadgeText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
+        {/* Placeholder keeps logo centred */}
+        <View style={{ width: 30 }} />
       </View>
 
       {/* Search bar */}
@@ -430,11 +364,9 @@ export default function DiscoverScreen() {
             autoFocus
             style={[styles.searchInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
           />
-          {search ? (
-            <TouchableOpacity onPress={() => setSearch("")} activeOpacity={0.7}>
-              <Feather name="x" size={16} color={colors.mutedForeground} />
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity onPress={() => { setSearch(""); setSearchOpen(false); }} activeOpacity={0.7}>
+            <Feather name="x" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
         </View>
       )}
 
@@ -472,7 +404,12 @@ export default function DiscoverScreen() {
         }
       />
 
-      <ProfileDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <ProfileDrawer
+        visible={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onFiltersPress={() => setFiltersOpen(true)}
+        onSearchPress={() => setSearchOpen(true)}
+      />
     </View>
   );
 }
@@ -492,21 +429,6 @@ const styles = StyleSheet.create({
   logoMark: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
   logoMarkText: { fontSize: 14 },
   brandName: { fontSize: 18, letterSpacing: -0.5 },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 4 },
-  filterActiveDot: { position: "absolute", top: 2, right: 2, width: 6, height: 6, borderRadius: 3 },
-  notifBtn: { position: "relative" },
-  notifBadge: {
-    position: "absolute",
-    top: -1,
-    right: -1,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 3,
-  },
-  notifBadgeText: { fontSize: 9 },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",

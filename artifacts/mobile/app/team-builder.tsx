@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   ScrollView,
@@ -15,7 +16,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TalentCard } from "@/components/TalentCard";
-import { ALL_TALENT, TEAM_ROLES, type Talent } from "@/constants/data";
+import { TEAM_ROLES, type Talent } from "@/constants/data";
+import { useTalent } from "@/context/TalentContext";
+import { useTeams } from "@/context/TeamsContext";
 import { useColors } from "@/hooks/useColors";
 
 const STEPS = ["Set Up", "Add Members", "Review"];
@@ -23,6 +26,8 @@ const STEPS = ["Set Up", "Add Members", "Review"];
 export default function TeamBuilderScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { talent } = useTalent();
+  const { createTeam } = useTeams();
   const [step, setStep] = useState(0);
   const [teamName, setTeamName] = useState("");
   const [teamDesc, setTeamDesc] = useState("");
@@ -30,6 +35,7 @@ export default function TeamBuilderScreen() {
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [selectedRole, setSelectedRole] = useState("all");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [creating, setCreating] = useState(false);
 
   const paddingTop = insets.top + (Platform.OS === "web" ? 67 : 16);
   const paddingBottom = insets.bottom + (Platform.OS === "web" ? 34 : 16);
@@ -41,14 +47,28 @@ export default function TeamBuilderScreen() {
     return Object.keys(e).length === 0;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step === 0 && !validateStep0()) return;
     if (step < 2) {
       Haptics.selectionAsync();
       setStep((s) => s + 1);
     } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      if (creating) return;
+      setCreating(true);
+      try {
+        await createTeam({
+          name: teamName,
+          description: teamDesc || undefined,
+          dayRate: teamRate ? Number(teamRate) : undefined,
+          memberIds: selectedMembers,
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.back();
+      } catch {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } finally {
+        setCreating(false);
+      }
     }
   };
 
@@ -61,13 +81,13 @@ export default function TeamBuilderScreen() {
 
   const filteredTalent =
     selectedRole === "all"
-      ? ALL_TALENT
-      : ALL_TALENT.filter((t) => {
+      ? talent
+      : talent.filter((t) => {
           if (selectedRole === "model") return t.type === "model";
           return t.type === "artist" && t.artistCategory === selectedRole;
         });
 
-  const selectedTalent = ALL_TALENT.filter((t) => selectedMembers.includes(t.id));
+  const selectedTalent = talent.filter((t) => selectedMembers.includes(t.id));
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -136,7 +156,7 @@ export default function TeamBuilderScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.stepHeader}>
-            <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
               Name your team
             </Text>
             <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -346,7 +366,7 @@ export default function TeamBuilderScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.stepHeader}>
-            <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
               Review your team
             </Text>
             <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -411,16 +431,23 @@ export default function TeamBuilderScreen() {
         <TouchableOpacity
           style={[
             styles.nextBtn,
-            { backgroundColor: colors.primary, borderRadius: colors.radius },
+            { backgroundColor: creating ? colors.primaryDim : colors.primary, borderRadius: colors.radius },
           ]}
           onPress={handleNext}
           activeOpacity={0.82}
+          disabled={creating}
         >
-          <Text style={[styles.nextBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
-            {step < 2 ? "Continue" : "Create Team"}
-          </Text>
-          {step < 2 && <Feather name="arrow-right" size={18} color="#fff" />}
-          {step === 2 && <Feather name="check" size={18} color="#fff" />}
+          {creating ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Text style={[styles.nextBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                {step < 2 ? "Continue" : "Create Team"}
+              </Text>
+              {step < 2 && <Feather name="arrow-right" size={18} color="#fff" />}
+              {step === 2 && <Feather name="check" size={18} color="#fff" />}
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </View>

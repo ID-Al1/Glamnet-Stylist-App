@@ -23,9 +23,10 @@ export default function WelcomeScreen() {
   const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
+    const nativeDriver = Platform.OS !== "web";
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, damping: 18, stiffness: 120, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: nativeDriver }),
+      Animated.spring(slideAnim, { toValue: 0, damping: 18, stiffness: 120, useNativeDriver: nativeDriver }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
@@ -35,38 +36,23 @@ export default function WelcomeScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop, paddingBottom }]}>
       {/* Hero image */}
-      <View style={styles.imageContainer}>
+      <View style={styles.imageContainer} pointerEvents="none">
         <Image
           source={require("@/assets/images/discover-hero.png")}
           style={styles.heroImage}
           resizeMode="cover"
         />
         <View
-          style={[
-            styles.imageOverlay,
-            {
-              backgroundColor: undefined,
-            },
-          ]}
+          style={[styles.imageOverlay, { backgroundColor: undefined }]}
+          pointerEvents="none"
         >
           <View
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                backgroundColor: colors.background,
-                opacity: 0,
-              },
-            ]}
+            style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, opacity: 0 }]}
+            pointerEvents="none"
           />
           <Animated.View
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                opacity: fadeAnim,
-                justifyContent: "flex-end",
-                padding: 0,
-              },
-            ]}
+            style={[StyleSheet.absoluteFill, { opacity: fadeAnim, justifyContent: "flex-end", padding: 0 }]}
+            pointerEvents="none"
           >
             <View
               style={{
@@ -78,6 +64,7 @@ export default function WelcomeScreen() {
                 backgroundColor: colors.background,
                 opacity: 0.92,
               }}
+              pointerEvents="none"
             />
           </Animated.View>
         </View>
@@ -107,36 +94,12 @@ export default function WelcomeScreen() {
 
         {/* Tagline */}
         <View style={styles.tagline}>
-          <Text style={[styles.taglineTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+          <Text style={[styles.taglineTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
             Where South African{"\n"}beauty talent thrives.
           </Text>
           <Text style={[styles.taglineSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
             Connect models, artists, and clients for extraordinary creative campaigns.
           </Text>
-        </View>
-
-        {/* Stats */}
-        <View style={[styles.statsBar, { backgroundColor: colors.warm, borderRadius: colors.radius }]}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statNum, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>247</Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Jobs Created
-            </Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statNum, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>R186K</Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Paid Out
-            </Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statNum, { color: colors.purple, fontFamily: "Inter_700Bold" }]}>11+</Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Talent
-            </Text>
-          </View>
         </View>
 
         {/* CTAs */}
@@ -229,30 +192,6 @@ const styles = StyleSheet.create({
   taglineSub: {
     fontSize: 14,
     lineHeight: 20,
-  },
-  statsBar: {
-    flexDirection: "row",
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: "center",
-    gap: 2,
-  },
-  statNum: {
-    fontSize: 18,
-    letterSpacing: -0.5,
-  },
-  statLabel: {
-    fontSize: 10,
-    textTransform: "uppercase" as const,
-    letterSpacing: 0.5,
-  },
-  statDivider: {
-    width: 1,
-    alignSelf: "stretch",
-    marginVertical: 4,
   },
   ctas: {
     gap: 10,

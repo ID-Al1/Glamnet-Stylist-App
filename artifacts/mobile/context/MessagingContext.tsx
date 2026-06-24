@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useReducer,
 } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { apiFetch } from "@/lib/api";
 
 export interface Message {
   id: string;
@@ -23,6 +23,7 @@ export interface Thread {
   participantRole: string;
   participantHandle: string;
   participantType: "model" | "artist";
+  participantAvatarUrl?: string | null;
   lastMessage: string;
   lastTimestamp: number;
   unreadCount: number;
@@ -32,20 +33,29 @@ export interface Thread {
 interface State {
   threads: Thread[];
   messages: Record<string, Message[]>;
+  isLoading: boolean;
 }
 
 type Action =
-  | { type: "LOAD"; payload: State }
-  | { type: "SEND_MESSAGE"; threadId: string; message: Message; isIncoming: boolean }
+  | { type: "LOAD_THREADS"; threads: Thread[] }
+  | { type: "LOAD_MESSAGES"; threadId: string; messages: Message[] }
+  | { type: "APPEND_MESSAGE"; threadId: string; message: Message; isIncoming: boolean }
   | { type: "MARK_THREAD_READ"; threadId: string }
-  | { type: "ADD_THREAD"; thread: Thread };
+  | { type: "ADD_THREAD"; thread: Thread }
+  | { type: "SET_LOADING"; value: boolean };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case "LOAD":
-      return action.payload;
+    case "LOAD_THREADS":
+      return { ...state, threads: action.threads, isLoading: false };
 
-    case "SEND_MESSAGE": {
+    case "LOAD_MESSAGES":
+      return {
+        ...state,
+        messages: { ...state.messages, [action.threadId]: action.messages },
+      };
+
+    case "APPEND_MESSAGE": {
       const existing = state.messages[action.threadId] ?? [];
       return {
         ...state,
@@ -59,9 +69,7 @@ function reducer(state: State, action: Action): State {
                 ...t,
                 lastMessage: action.message.text,
                 lastTimestamp: action.message.timestamp,
-                unreadCount: action.isIncoming
-                  ? t.unreadCount + 1
-                  : t.unreadCount,
+                unreadCount: action.isIncoming ? t.unreadCount + 1 : t.unreadCount,
               }
             : t
         ),
@@ -86,103 +94,29 @@ function reducer(state: State, action: Action): State {
     case "ADD_THREAD": {
       if (state.threads.some((t) => t.id === action.thread.id)) return state;
       return {
+        ...state,
         threads: [action.thread, ...state.threads],
         messages: { ...state.messages, [action.thread.id]: [] },
       };
     }
+
+    case "SET_LOADING":
+      return { ...state, isLoading: action.value };
 
     default:
       return state;
   }
 }
 
-const STORAGE_KEY = "@glamnet_messages_v2";
-const ME = "me";
-
-const SEED_STATE: State = {
-  threads: [
-    {
-      id: "t_a1",
-      participantId: "a1",
-      participantName: "Lerato Dlamini",
-      participantRole: "Bridal & Editorial MUA",
-      participantHandle: "@lerato_mua",
-      participantType: "artist",
-      lastMessage: "Also — will you need a house call or are you coming to my studio?",
-      lastTimestamp: Date.now() - 1000 * 60 * 13,
-      unreadCount: 2,
-      bookingContext: "Bridal shoot — June 8",
-    },
-    {
-      id: "t_a4",
-      participantId: "a4",
-      participantName: "Zintle Xaba",
-      participantHandle: "@zintle_hair",
-      participantRole: "Natural Hair Specialist",
-      participantType: "artist",
-      lastMessage: "The rate includes a travel kit for on-location work.",
-      lastTimestamp: Date.now() - 1000 * 60 * 60 * 3,
-      unreadCount: 1,
-      bookingContext: "Editorial campaign",
-    },
-    {
-      id: "t_m1",
-      participantId: "m1",
-      participantName: "Naledi Dube",
-      participantHandle: "@naledi.model",
-      participantRole: "Commercial & Editorial",
-      participantType: "model",
-      lastMessage: "Looking forward to it! I'll confirm by Friday.",
-      lastTimestamp: Date.now() - 1000 * 60 * 60 * 24,
-      unreadCount: 0,
-      bookingContext: "Woolworths campaign",
-    },
-    {
-      id: "t_a6",
-      participantId: "a6",
-      participantName: "Sipho Dlamini",
-      participantHandle: "@sipho.photo",
-      participantRole: "Campaign Photographer",
-      participantType: "artist",
-      lastMessage: "My studio in Cape Town is available from the 10th.",
-      lastTimestamp: Date.now() - 1000 * 60 * 60 * 48,
-      unreadCount: 0,
-    },
-  ],
-  messages: {
-    t_a1: [
-      { id: "m1_1", threadId: "t_a1", senderId: ME, text: "Hi Lerato! I saw your profile and love your bridal work. Are you available June 8 for a shoot in Joburg?", timestamp: Date.now() - 1000 * 60 * 60 * 2, read: true },
-      { id: "m1_2", threadId: "t_a1", senderId: "a1", text: "Hi! Thank you so much 😊 Let me check my calendar...", timestamp: Date.now() - 1000 * 60 * 50, read: true },
-      { id: "m1_3", threadId: "t_a1", senderId: "a1", text: "Yes! I have that date open. Can you share the mood board?", timestamp: Date.now() - 1000 * 60 * 14, read: false },
-      { id: "m1_4", threadId: "t_a1", senderId: "a1", text: "Also — will you need a house call or are you coming to my studio?", timestamp: Date.now() - 1000 * 60 * 13, read: false },
-    ],
-    t_a4: [
-      { id: "m4_1", threadId: "t_a4", senderId: ME, text: "Hey Zintle! We're doing an editorial campaign with Naledi Dube and need a natural hair specialist. Interested?", timestamp: Date.now() - 1000 * 60 * 60 * 5, read: true },
-      { id: "m4_2", threadId: "t_a4", senderId: "a4", text: "Absolutely, I'd love to be involved! What's the concept?", timestamp: Date.now() - 1000 * 60 * 60 * 4, read: true },
-      { id: "m4_3", threadId: "t_a4", senderId: ME, text: "Think afro-futurist, rich textures, bold looks. Day rate R1,800 — does that work?", timestamp: Date.now() - 1000 * 60 * 60 * 3.5, read: true },
-      { id: "m4_4", threadId: "t_a4", senderId: "a4", text: "The rate includes a travel kit for on-location work.", timestamp: Date.now() - 1000 * 60 * 60 * 3, read: false },
-    ],
-    t_m1: [
-      { id: "m5_1", threadId: "t_m1", senderId: ME, text: "Hi Naledi! Woolworths Fashion is casting for their winter campaign. Are you available mid-June?", timestamp: Date.now() - 1000 * 60 * 60 * 26, read: true },
-      { id: "m5_2", threadId: "t_m1", senderId: "m1", text: "That sounds amazing! I'm free June 12–15. What's the brief?", timestamp: Date.now() - 1000 * 60 * 60 * 25, read: true },
-      { id: "m5_3", threadId: "t_m1", senderId: ME, text: "Clean, sophisticated — think neutral tones, structured silhouettes. Rate is R3,500. We'll send the full brief over.", timestamp: Date.now() - 1000 * 60 * 60 * 25, read: true },
-      { id: "m5_4", threadId: "t_m1", senderId: "m1", text: "Looking forward to it! I'll confirm by Friday.", timestamp: Date.now() - 1000 * 60 * 60 * 24, read: true },
-    ],
-    t_a6: [
-      { id: "m6_1", threadId: "t_a6", senderId: ME, text: "Sipho, love your lighting work. Do you have studio availability in early June for a product campaign?", timestamp: Date.now() - 1000 * 60 * 60 * 50, read: true },
-      { id: "m6_2", threadId: "t_a6", senderId: "a6", text: "Thanks! What kind of products? And what's your timeline?", timestamp: Date.now() - 1000 * 60 * 60 * 49, read: true },
-      { id: "m6_3", threadId: "t_a6", senderId: "a6", text: "My studio in Cape Town is available from the 10th.", timestamp: Date.now() - 1000 * 60 * 60 * 48, read: true },
-    ],
-  },
-};
-
 interface MessagingContextType {
   threads: Thread[];
   messages: Record<string, Message[]>;
   totalUnread: number;
-  sendMessage: (threadId: string, text: string) => void;
-  receiveMessage: (threadId: string, senderId: string, text: string) => void;
-  markThreadRead: (threadId: string) => void;
+  isLoading: boolean;
+  refreshThreads: () => Promise<void>;
+  loadMessages: (threadId: string) => Promise<void>;
+  sendMessage: (threadId: string, text: string) => Promise<void>;
+  markThreadRead: (threadId: string) => Promise<void>;
   getThread: (threadId: string) => Thread | undefined;
   getOrCreateThread: (
     participantId: string,
@@ -191,70 +125,42 @@ interface MessagingContextType {
     participantHandle: string,
     participantType: "model" | "artist",
     bookingContext?: string
-  ) => string;
+  ) => Promise<string>;
 }
 
 const MessagingContext = createContext<MessagingContextType | null>(null);
 
 export function MessagingProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, { threads: [], messages: {} });
+  const [state, dispatch] = useReducer(reducer, { threads: [], messages: {}, isLoading: true });
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          dispatch({ type: "LOAD", payload: JSON.parse(raw) });
-        } else {
-          dispatch({ type: "LOAD", payload: SEED_STATE });
-        }
-      } catch {
-        dispatch({ type: "LOAD", payload: SEED_STATE });
-      }
-    })();
+  const refreshThreads = useCallback(async () => {
+    try {
+      const { threads } = await apiFetch<{ threads: Thread[] }>("/messages/threads");
+      dispatch({ type: "LOAD_THREADS", threads });
+    } catch {
+      dispatch({ type: "SET_LOADING", value: false });
+    }
   }, []);
 
   useEffect(() => {
-    if (state.threads.length === 0 && Object.keys(state.messages).length === 0) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => {});
-  }, [state]);
+    refreshThreads();
+  }, [refreshThreads]);
 
-  const sendMessage = useCallback((threadId: string, text: string) => {
-    dispatch({
-      type: "SEND_MESSAGE",
-      threadId,
-      isIncoming: false,
-      message: {
-        id: `${threadId}_${Date.now()}_out`,
-        threadId,
-        senderId: ME,
-        text,
-        timestamp: Date.now(),
-        read: true,
-      },
+  const loadMessages = useCallback(async (threadId: string) => {
+    const { messages } = await apiFetch<{ messages: Message[] }>(`/messages/threads/${threadId}`);
+    dispatch({ type: "LOAD_MESSAGES", threadId, messages });
+  }, []);
+
+  const sendMessage = useCallback(async (threadId: string, text: string) => {
+    const { message } = await apiFetch<{ message: Message }>(`/messages/threads/${threadId}/messages`, {
+      method: "POST",
+      body: { text },
     });
+    dispatch({ type: "APPEND_MESSAGE", threadId, message, isIncoming: false });
   }, []);
 
-  const receiveMessage = useCallback(
-    (threadId: string, senderId: string, text: string) => {
-      dispatch({
-        type: "SEND_MESSAGE",
-        threadId,
-        isIncoming: true,
-        message: {
-          id: `${threadId}_${Date.now()}_in`,
-          threadId,
-          senderId,
-          text,
-          timestamp: Date.now(),
-          read: false,
-        },
-      });
-    },
-    []
-  );
-
-  const markThreadRead = useCallback((threadId: string) => {
+  const markThreadRead = useCallback(async (threadId: string) => {
+    await apiFetch(`/messages/threads/${threadId}/read`, { method: "PATCH" });
     dispatch({ type: "MARK_THREAD_READ", threadId });
   }, []);
 
@@ -264,21 +170,26 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const getOrCreateThread = useCallback(
-    (
+    async (
       participantId: string,
       participantName: string,
       participantRole: string,
       participantHandle: string,
       participantType: "model" | "artist",
       bookingContext?: string
-    ): string => {
+    ): Promise<string> => {
       const existing = state.threads.find((t) => t.participantId === participantId);
       if (existing) return existing.id;
-      const newId = `t_${participantId}_${Date.now()}`;
+
+      const { conversationId } = await apiFetch<{ conversationId: string }>("/messages/threads", {
+        method: "POST",
+        body: { participantId, bookingContext },
+      });
+
       dispatch({
         type: "ADD_THREAD",
         thread: {
-          id: newId,
+          id: conversationId,
           participantId,
           participantName,
           participantRole,
@@ -290,7 +201,8 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
           bookingContext,
         },
       });
-      return newId;
+
+      return conversationId;
     },
     [state.threads]
   );
@@ -303,8 +215,10 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
         threads: state.threads,
         messages: state.messages,
         totalUnread,
+        isLoading: state.isLoading,
+        refreshThreads,
+        loadMessages,
         sendMessage,
-        receiveMessage,
         markThreadRead,
         getThread,
         getOrCreateThread,

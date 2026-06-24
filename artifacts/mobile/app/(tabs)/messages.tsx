@@ -213,7 +213,7 @@ export default function MessagesTab() {
             <Text
               style={[
                 styles.headerTitle,
-                { color: colors.foreground, fontFamily: "Inter_700Bold" },
+                { color: colors.foreground, fontFamily: "Fraunces_700Bold" },
               ]}
             >
               Messages

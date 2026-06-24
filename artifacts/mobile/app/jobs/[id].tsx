@@ -14,8 +14,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { JOB_BOARD, type JobRole } from "@/constants/jobs";
+import { type JobRole } from "@/constants/jobs";
 import { useApplications } from "@/context/ApplicationsContext";
+import { useJobs } from "@/context/JobsContext";
 import { useColors } from "@/hooks/useColors";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -35,6 +36,7 @@ const ROLE_OPTIONS: JobRole[] = [
   "Photographer",
   "Stylist",
   "Lash & Brow",
+  "Barber",
 ];
 
 export default function JobDetailScreen() {
@@ -42,6 +44,7 @@ export default function JobDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { hasApplied, apply, withdraw, getApplication } = useApplications();
+  const { jobs } = useJobs();
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState<JobRole | null>(null);
   const [message, setMessage] = useState("");
@@ -50,7 +53,7 @@ export default function JobDetailScreen() {
   const paddingTop = insets.top + (Platform.OS === "web" ? 67 : 0);
   const paddingBottom = insets.bottom + (Platform.OS === "web" ? 34 : 0);
 
-  const job = JOB_BOARD.find((j) => j.id === id);
+  const job = jobs.find((j) => j.id === id);
   const application = job ? getApplication(job.id) : undefined;
   const applied = job ? hasApplied(job.id) : false;
   const spotsLeft = job ? job.spotsTotal - job.spotsFilled : 0;
@@ -103,7 +106,7 @@ export default function JobDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
           Job Brief
         </Text>
         <View style={{ width: 30 }} />
@@ -166,7 +169,7 @@ export default function JobDetailScreen() {
             </View>
           </View>
 
-          <Text style={[styles.heroTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+          <Text style={[styles.heroTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
             {job.title}
           </Text>
 

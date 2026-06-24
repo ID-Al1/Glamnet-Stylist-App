@@ -9,6 +9,7 @@ import { Platform, StyleSheet, Text, View, useColorScheme } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 import { useMessaging } from "@/context/MessagingContext";
+import { useAuth } from "@/context/AuthContext";
 
 function UnreadBadge({ count }: { count: number }) {
   const colors = useColors();
@@ -36,21 +37,31 @@ function UnreadBadge({ count }: { count: number }) {
   );
 }
 
-function NativeTabLayout() {
+function NativeTabLayout({ role }: { role: "client" | "stylist" | "brand" | null }) {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "sparkles", selected: "sparkles" }} />
         <Label>Discover</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="teams">
-        <Icon sf={{ default: "person.3", selected: "person.3.fill" }} />
-        <Label>Teams</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="earn">
-        <Icon sf={{ default: "banknote", selected: "banknote.fill" }} />
-        <Label>Earn</Label>
-      </NativeTabs.Trigger>
+      {(role === "stylist" || role === "brand") && (
+        <NativeTabs.Trigger name="teams">
+          <Icon sf={{ default: "person.3", selected: "person.3.fill" }} />
+          <Label>Teams</Label>
+        </NativeTabs.Trigger>
+      )}
+      {role === "stylist" && (
+        <NativeTabs.Trigger name="earn">
+          <Icon sf={{ default: "banknote", selected: "banknote.fill" }} />
+          <Label>Appointments</Label>
+        </NativeTabs.Trigger>
+      )}
+      {role === "brand" && (
+        <NativeTabs.Trigger name="castings">
+          <Icon sf={{ default: "briefcase", selected: "briefcase.fill" }} />
+          <Label>Castings</Label>
+        </NativeTabs.Trigger>
+      )}
       <NativeTabs.Trigger name="messages">
         <Icon sf={{ default: "message", selected: "message.fill" }} />
         <Label>Messages</Label>
@@ -63,7 +74,7 @@ function NativeTabLayout() {
   );
 }
 
-function ClassicTabLayout() {
+function ClassicTabLayout({ role }: { role: "client" | "stylist" | "brand" | null }) {
   const colors = useColors();
   const colorScheme = useColorScheme();
   const { totalUnread } = useMessaging();
@@ -100,10 +111,7 @@ function ClassicTabLayout() {
             />
           ) : isWeb ? (
             <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: colors.background },
-              ]}
+              style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
             />
           ) : null,
       }}
@@ -124,6 +132,7 @@ function ClassicTabLayout() {
         name="teams"
         options={{
           title: "Teams",
+          href: role === "client" ? null : undefined,
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="person.3" tintColor={color} size={22} />
@@ -135,12 +144,26 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="earn"
         options={{
-          title: "Earn",
+          title: "Appointments",
+          href: role !== "stylist" ? null : undefined,
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="banknote" tintColor={color} size={22} />
             ) : (
               <Feather name="dollar-sign" size={20} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="castings"
+        options={{
+          title: "Castings",
+          href: role === "brand" ? undefined : null,
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="briefcase" tintColor={color} size={22} />
+            ) : (
+              <Feather name="briefcase" size={20} color={color} />
             ),
         }}
       />
@@ -177,8 +200,10 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
+  const { user } = useAuth();
+  const role = user?.role ?? null;
   if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
+    return <NativeTabLayout role={role} />;
   }
-  return <ClassicTabLayout />;
+  return <ClassicTabLayout role={role} />;
 }

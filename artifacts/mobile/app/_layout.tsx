@@ -5,11 +5,15 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
+import {
+  Fraunces_400Regular,
+  Fraunces_700Bold,
+} from "@expo-google-fonts/fraunces";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -20,7 +24,13 @@ import { NotificationsProvider } from "@/context/NotificationsContext";
 import { MessagingProvider } from "@/context/MessagingContext";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { ApplicationsProvider } from "@/context/ApplicationsContext";
+import { BookingProvider } from "@/context/BookingContext";
+import { JobsProvider } from "@/context/JobsContext";
 import { PostingsProvider } from "@/context/PostingsContext";
+import { TalentProvider } from "@/context/TalentContext";
+import { TeamsProvider } from "@/context/TeamsContext";
+import { PortfolioProvider } from "@/context/PortfolioContext";
+import { PaymentProvider } from "@/context/PaymentContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -79,6 +89,34 @@ function RootLayoutNav() {
           options={{ headerShown: false, presentation: "card" }}
         />
         <Stack.Screen
+          name="verification"
+          options={{ headerShown: false, presentation: "card" }}
+        />
+        <Stack.Screen
+          name="payment"
+          options={{ headerShown: false, presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="castings"
+          options={{ headerShown: false, presentation: "card" }}
+        />
+        <Stack.Screen
+          name="career-insights"
+          options={{ headerShown: false, presentation: "card" }}
+        />
+        <Stack.Screen
+          name="upgrade-pro"
+          options={{ headerShown: false, presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="learn"
+          options={{ headerShown: false, presentation: "card" }}
+        />
+        <Stack.Screen
+          name="platform-stats"
+          options={{ headerShown: false, presentation: "card" }}
+        />
+        <Stack.Screen
           name="how-it-works"
           options={{ headerShown: false, presentation: "card" }}
         />
@@ -102,8 +140,54 @@ function RootLayoutNav() {
           name="my-castings/[id]"
           options={{ headerShown: false, presentation: "card" }}
         />
+        <Stack.Screen
+          name="home"
+          options={{ headerShown: false, presentation: "card" }}
+        />
+        <Stack.Screen
+          name="portfolio-editor"
+          options={{ headerShown: false, presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="book-team/[id]"
+          options={{ headerShown: false, presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="profile"
+          options={{ headerShown: false, presentation: "card" }}
+        />
       </Stack>
     </AuthGuard>
+  );
+}
+
+function AppProviders({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider>
+      <SettingsProvider>
+        <PostingsProvider>
+          <JobsProvider>
+            <TalentProvider>
+              <ApplicationsProvider>
+                <BookingProvider>
+                  <TeamsProvider>
+                    <PortfolioProvider>
+                      <PaymentProvider>
+                      <NotificationsProvider>
+                        <MessagingProvider>
+                          {children}
+                        </MessagingProvider>
+                      </NotificationsProvider>
+                      </PaymentProvider>
+                    </PortfolioProvider>
+                  </TeamsProvider>
+                </BookingProvider>
+              </ApplicationsProvider>
+            </TalentProvider>
+          </JobsProvider>
+        </PostingsProvider>
+      </SettingsProvider>
+    </AuthProvider>
   );
 }
 
@@ -113,6 +197,8 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    Fraunces_400Regular,
+    Fraunces_700Bold,
   });
 
   useEffect(() => {
@@ -123,27 +209,25 @@ export default function RootLayout() {
 
   if (!fontsLoaded && !fontError) return null;
 
+  const inner = Platform.OS === "web" ? (
+    <AppProviders>
+      <RootLayoutNav />
+    </AppProviders>
+  ) : (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider>
+        <AppProviders>
+          <RootLayoutNav />
+        </AppProviders>
+      </KeyboardProvider>
+    </GestureHandlerRootView>
+  );
+
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <KeyboardProvider>
-              <AuthProvider>
-                <SettingsProvider>
-                  <PostingsProvider>
-                    <ApplicationsProvider>
-                      <NotificationsProvider>
-                        <MessagingProvider>
-                          <RootLayoutNav />
-                        </MessagingProvider>
-                      </NotificationsProvider>
-                    </ApplicationsProvider>
-                  </PostingsProvider>
-                </SettingsProvider>
-              </AuthProvider>
-            </KeyboardProvider>
-          </GestureHandlerRootView>
+          {inner}
         </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>

@@ -156,7 +156,7 @@ export default function HowItWorksScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
           How It Works
         </Text>
         <View style={{ width: 30 }} />
@@ -180,21 +180,12 @@ export default function HowItWorksScreen() {
           <Text style={[styles.heroTag, { color: "rgba(255,255,255,0.7)", fontFamily: "Inter_500Medium" }]}>
             THE GLAMNET PROCESS
           </Text>
-          <Text style={[styles.heroTitle, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+          <Text style={[styles.heroTitle, { color: "#fff", fontFamily: "Fraunces_700Bold" }]}>
             South Africa's beauty talent platform
           </Text>
           <Text style={[styles.heroSub, { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular" }]}>
             Every artist is verified. Every booking is protected. Every payment is fair.
           </Text>
-          {/* Stats */}
-          <View style={styles.heroStats}>
-            {[["247", "Jobs"], ["R186K", "Paid Out"], ["11+", "Artists"], ["9", "Provinces"]].map(([n, l]) => (
-              <View key={l} style={styles.heroStat}>
-                <Text style={[styles.heroStatNum, { color: "#fff", fontFamily: "Inter_700Bold" }]}>{n}</Text>
-                <Text style={[styles.heroStatLabel, { color: "rgba(255,255,255,0.65)", fontFamily: "Inter_400Regular" }]}>{l}</Text>
-              </View>
-            ))}
-          </View>
         </View>
 
         {/* Role toggle */}
@@ -257,7 +248,7 @@ export default function HowItWorksScreen() {
                 <Text style={[styles.stepNumLabel, { color: step.color, fontFamily: "Inter_600SemiBold" }]}>
                   {step.num}
                 </Text>
-                <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                   {step.title}
                 </Text>
                 <Text style={[styles.stepBody2, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -469,10 +460,6 @@ const styles = StyleSheet.create({
   heroTag: { fontSize: 9, letterSpacing: 2, marginBottom: 8 },
   heroTitle: { fontSize: 22, letterSpacing: -0.6, lineHeight: 28, marginBottom: 8 },
   heroSub: { fontSize: 13, lineHeight: 18, marginBottom: 20 },
-  heroStats: { flexDirection: "row", gap: 0 },
-  heroStat: { flex: 1, alignItems: "center", gap: 2 },
-  heroStatNum: { fontSize: 16, letterSpacing: -0.4 },
-  heroStatLabel: { fontSize: 9, textTransform: "uppercase" as const, letterSpacing: 0.5 },
   roleToggle: {
     flexDirection: "row",
     padding: 4,

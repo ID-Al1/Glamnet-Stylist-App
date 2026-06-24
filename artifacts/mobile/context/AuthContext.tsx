@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext,
   useCallback,
@@ -6,8 +5,9 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { apiFetch, saveToken, getToken, clearToken } from "@/lib/api";
 
-export type UserRole = "client" | "stylist";
+export type UserRole = "client" | "stylist" | "brand";
 
 export interface User {
   id: string;
@@ -18,13 +18,24 @@ export interface User {
   location: string;
   bio: string;
   repScore: number;
-  jobs: number;
+  jobsCount: number;
   referrals: number;
   earnings: number;
   tier: "New" | "Active" | "Rising" | "Pro" | "Elite";
   verified: boolean;
   available: boolean;
   specialties?: string[];
+  avatarUrl?: string | null;
+  province?: string | null;
+  city?: string | null;
+  dayRate?: number | null;
+  halfDayRate?: number | null;
+  instantBook?: boolean;
+  houseCallsEnabled?: boolean;
+  callOutBase?: number | null;
+  callOutRate?: number | null;
+  studioAvailable?: boolean;
+  foundingMember?: boolean;
 }
 
 interface AuthContextType {
@@ -36,89 +47,67 @@ interface AuthContextType {
   updateUser: (data: Partial<User>) => Promise<void>;
 }
 
-const AUTH_KEY = "@glamnet_user";
-
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // On startup, check if we have a saved token and fetch the current user
   useEffect(() => {
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(AUTH_KEY);
-        if (raw) setUser(JSON.parse(raw));
+        const token = await getToken();
+        if (token) {
+          const { user: me } = await apiFetch<{ user: User }>("/auth/me");
+          setUser(me);
+        }
       } catch {
-        // ignore
+        // Token expired or invalid — clear it and stay logged out
+        await clearToken();
       } finally {
         setIsLoading(false);
       }
     })();
   }, []);
 
-  const signIn = useCallback(async (email: string, _password: string) => {
-    const raw = await AsyncStorage.getItem(AUTH_KEY);
-    if (raw) {
-      const stored: User = JSON.parse(raw);
-      if (stored.email === email) {
-        setUser(stored);
-        return;
-      }
-    }
-    // Demo: auto-create a user if not found
-    const demo: User = {
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
-      name: "GlamNet User",
-      email,
-      role: "client",
-      handle: "@user",
-      location: "South Africa",
-      bio: "",
-      repScore: 0,
-      jobs: 0,
-      referrals: 0,
-      earnings: 0,
-      tier: "New",
-      verified: false,
-      available: false,
-    };
-    await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(demo));
-    setUser(demo);
+  const signIn = useCallback(async (email: string, password: string) => {
+    const { token, user: me } = await apiFetch<{ token: string; user: User }>("/auth/signin", {
+      method: "POST",
+      body: { email, password },
+      auth: false,
+    });
+    await saveToken(token);
+    setUser(me);
   }, []);
 
   const signUp = useCallback(async (data: Partial<User> & { password: string }) => {
-    const newUser: User = {
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
-      name: data.name ?? "New User",
-      email: data.email ?? "",
-      role: data.role ?? "client",
-      handle: data.handle ?? `@${(data.name ?? "user").toLowerCase().replace(/\s+/g, "")}`,
-      location: data.location ?? "South Africa",
-      bio: data.bio ?? "",
-      repScore: 0,
-      jobs: 0,
-      referrals: 0,
-      earnings: 0,
-      tier: "New",
-      verified: false,
-      available: data.role === "stylist" ? true : false,
-      specialties: data.specialties,
-    };
-    await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(newUser));
-    setUser(newUser);
+    const { token, user: me } = await apiFetch<{ token: string; user: User }>("/auth/signup", {
+      method: "POST",
+      body: {
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        role: data.role ?? "client",
+        handle: data.handle,
+        location: data.location,
+        specialties: data.specialties,
+      },
+      auth: false,
+    });
+    await saveToken(token);
+    setUser(me);
   }, []);
 
   const signOut = useCallback(async () => {
-    await AsyncStorage.removeItem(AUTH_KEY);
+    await clearToken();
     setUser(null);
   }, []);
 
+  // Local-only update — keeps the UI in sync without a round-trip
   const updateUser = useCallback(async (data: Partial<User>) => {
     if (!user) return;
-    const updated = { ...user, ...data };
-    await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(updated));
-    setUser(updated);
+    setUser({ ...user, ...data });
   }, [user]);
 
   return (

@@ -1,8 +1,40 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import authRouter from "./auth";
+import jobsRouter from "./jobs";
+import messagesRouter from "./messages";
+import talentRouter from "./talent";
+import notificationsRouter from "./notifications";
+import bookingsRouter from "./bookings";
+import ratingsRouter from "./ratings";
+import teamsRouter from "./teams";
+import portfolioRouter from "./portfolio";
+import trustRouter from "./verification";
+import paymentsRouter from "./payments";
+import flywheelRouter from "./referrals";
+import insightsRouter from "./insights";
+import subscriptionsRouter from "./subscriptions";
+import contractsRouter from "./contracts";
+import analyticsRouter from "./analytics";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use("/auth", authRouter);
+router.use("/jobs", jobsRouter);
+router.use("/messages", messagesRouter);
+router.use("/talent", talentRouter);
+router.use("/notifications", notificationsRouter);
+router.use("/bookings", bookingsRouter);
+router.use("/ratings", ratingsRouter);
+router.use("/teams", teamsRouter);
+router.use("/portfolio", portfolioRouter);
+router.use("/trust", trustRouter);
+router.use("/payments", paymentsRouter);
+router.use("/flywheel", flywheelRouter);
+router.use("/insights", insightsRouter);
+router.use("/subscriptions", subscriptionsRouter);
+router.use("/contracts", contractsRouter);
+router.use("/analytics", analyticsRouter);
 
 export default router;

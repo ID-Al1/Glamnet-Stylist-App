@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useRef, useState } from "react";
 import {
+  Animated,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,7 +20,7 @@ import { JOB_TYPES, type JobRole, type JobType } from "@/constants/jobs";
 import { usePostings, type PostingDraft } from "@/context/PostingsContext";
 import { useColors } from "@/hooks/useColors";
 
-const ROLES: JobRole[] = ["MUA", "Hair", "Nails", "Model", "Photographer", "Stylist", "Lash & Brow"];
+const ROLES: JobRole[] = ["MUA", "Hair", "Nails", "Model", "Photographer", "Stylist", "Lash & Brow", "Barber"];
 const CLIENT_TYPES = ["Brand", "Agency", "Private"] as const;
 const SPOTS_OPTIONS = [1, 2, 3, 4, 5, 6];
 
@@ -109,6 +110,13 @@ export default function PostJobScreen() {
 
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [posted, setPosted] = useState(false);
+  const [postedTitle, setPostedTitle] = useState("");
+
+  const stepAnim = useRef(new Animated.Value(0)).current;
+  const stepOpacity = useRef(new Animated.Value(1)).current;
+  const successScale = useRef(new Animated.Value(0)).current;
+  const successOpacity = useRef(new Animated.Value(0)).current;
 
   // Step 1 fields
   const [title, setTitle] = useState("");
@@ -137,6 +145,15 @@ export default function PostJobScreen() {
 
   const scrollTop = () => scrollRef.current?.scrollTo({ y: 0, animated: true });
 
+  const animateStep = (direction: 1 | -1) => {
+    stepOpacity.setValue(0);
+    stepAnim.setValue(direction * 28);
+    Animated.parallel([
+      Animated.spring(stepAnim, { toValue: 0, damping: 22, stiffness: 220, useNativeDriver: true }),
+      Animated.timing(stepOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+    ]).start();
+  };
+
   const canAdvance = (() => {
     if (step === 0) return title.trim().length > 3 && client.trim().length > 1;
     if (step === 1) return city.trim().length > 1 && shootDate.trim().length > 2 && deadline.trim().length > 2;
@@ -145,20 +162,42 @@ export default function PostJobScreen() {
     return false;
   })();
 
+  const getMissingHint = (): string | null => {
+    if (step === 0) {
+      if (title.trim().length <= 3) return "Enter a job title to continue";
+      if (!client.trim()) return "Enter a client name to continue";
+    }
+    if (step === 1) {
+      if (!city.trim()) return "Enter a city to continue";
+      if (!shootDate.trim()) return "Add a shoot date to continue";
+      if (!deadline.trim()) return "Add an application deadline to continue";
+    }
+    if (step === 2) {
+      if (roles.length === 0) return "Select at least one role to continue";
+      if (!rateText.trim()) return "Enter a day rate to continue";
+    }
+    if (step === 3) {
+      if (brief.trim().length <= 20) return `Brief needs ${20 - brief.trim().length} more characters`;
+    }
+    return null;
+  };
+
   const handleNext = () => {
     if (!canAdvance) return;
     Haptics.selectionAsync();
     setStep((s) => s + 1);
+    animateStep(1);
     scrollTop();
   };
 
   const handleBack = () => {
     Haptics.selectionAsync();
     setStep((s) => s - 1);
+    animateStep(-1);
     scrollTop();
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSubmitting(true);
     const rateNum = parseInt(rateText.replace(/\D/g, ""), 10) || 0;
@@ -180,11 +219,17 @@ export default function PostJobScreen() {
       requirements,
       tags,
     };
-    addPosting(draft);
-    setTimeout(() => {
+    try {
+      await addPosting(draft);
+      setPostedTitle(title.trim());
+      setPosted(true);
+      Animated.parallel([
+        Animated.spring(successScale, { toValue: 1, damping: 14, stiffness: 140, useNativeDriver: true }),
+        Animated.timing(successOpacity, { toValue: 1, duration: 280, useNativeDriver: true }),
+      ]).start();
+    } finally {
       setSubmitting(false);
-      router.replace("/(tabs)/earn");
-    }, 600);
+    }
   };
 
   const toggleRole = (r: JobRole) => {
@@ -208,6 +253,61 @@ export default function PostJobScreen() {
   const provinceOpts = SA_PROVINCES.filter((p) => p.id !== "all");
   const jobTypeOpts = JOB_TYPES.filter((t) => t.id !== "all");
 
+  if (posted) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center", paddingHorizontal: 32, paddingBottom: paddingBottom + 16, paddingTop: paddingTop }]}>
+        <Animated.View style={{ alignItems: "center", gap: 20, opacity: successOpacity, transform: [{ scale: successScale }] }}>
+          <View style={[styles.successCircle, { backgroundColor: colors.greenDim, borderColor: colors.green + "40" }]}>
+            <Feather name="check" size={40} color={colors.green} />
+          </View>
+          <View style={{ alignItems: "center", gap: 8 }}>
+            <Text style={[styles.successTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
+              Casting Posted!
+            </Text>
+            <Text style={[styles.successSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              Your casting is now live and accepting applications.
+            </Text>
+          </View>
+          <View style={[styles.successJobChip, { backgroundColor: colors.primaryDim, borderColor: colors.primary + "30", borderRadius: colors.radius }]}>
+            <Feather name="briefcase" size={13} color={colors.primary} />
+            <Text style={[styles.successJobTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
+              {postedTitle}
+            </Text>
+          </View>
+          <View style={styles.successBtns}>
+            <TouchableOpacity
+              style={[styles.successPrimaryBtn, { backgroundColor: colors.primary, borderRadius: colors.radius }]}
+              onPress={() => router.replace("/(tabs)/earn")}
+              activeOpacity={0.82}
+            >
+              <Feather name="list" size={16} color="#fff" />
+              <Text style={[styles.successBtnText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                View My Castings
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setPosted(false);
+                setTitle(""); setClient(""); setJobType("Editorial"); setUrgent(false);
+                setProvince("GP"); setCity(""); setShootDate(""); setDeadline("");
+                setRoles([]); setSpots(1); setRateText("");
+                setBrief(""); setRequirements([]); setTags([]);
+                setStep(0);
+                successScale.setValue(0);
+                successOpacity.setValue(0);
+              }}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.successGhostText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                Post another casting
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
@@ -225,7 +325,7 @@ export default function PostJobScreen() {
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+          <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
             Post a Casting
           </Text>
           <Text style={[styles.headerSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -263,12 +363,13 @@ export default function PostJobScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          <Animated.View style={{ opacity: stepOpacity, transform: [{ translateX: stepAnim }] }}>
           {/* ─── STEP 1: BASICS ─── */}
           {step === 0 && (
             <View style={styles.stepContent}>
               <View style={[styles.stepHero, { backgroundColor: colors.primaryDim, borderRadius: colors.radius + 4 }]}>
                 <Feather name="edit-3" size={24} color={colors.primary} />
-                <Text style={[styles.stepHeroTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                <Text style={[styles.stepHeroTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                   Tell us about the role
                 </Text>
                 <Text style={[styles.stepHeroSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -364,7 +465,7 @@ export default function PostJobScreen() {
             <View style={styles.stepContent}>
               <View style={[styles.stepHero, { backgroundColor: colors.accentDim, borderRadius: colors.radius + 4 }]}>
                 <Feather name="map-pin" size={24} color={colors.accent} />
-                <Text style={[styles.stepHeroTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                <Text style={[styles.stepHeroTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                   Where & when?
                 </Text>
                 <Text style={[styles.stepHeroSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -416,7 +517,7 @@ export default function PostJobScreen() {
             <View style={styles.stepContent}>
               <View style={[styles.stepHero, { backgroundColor: colors.greenDim, borderRadius: colors.radius + 4 }]}>
                 <Feather name="users" size={24} color={colors.green} />
-                <Text style={[styles.stepHeroTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                <Text style={[styles.stepHeroTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                   Who do you need?
                 </Text>
                 <Text style={[styles.stepHeroSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -491,7 +592,7 @@ export default function PostJobScreen() {
             <View style={styles.stepContent}>
               <View style={[styles.stepHero, { backgroundColor: colors.purpleDim, borderRadius: colors.radius + 4 }]}>
                 <Feather name="file-text" size={24} color={colors.purple} />
-                <Text style={[styles.stepHeroTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                <Text style={[styles.stepHeroTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                   Paint the picture
                 </Text>
                 <Text style={[styles.stepHeroSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -644,7 +745,7 @@ export default function PostJobScreen() {
                   },
                 ]}
               >
-                <Text style={[styles.reviewTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                <Text style={[styles.reviewTitle, { color: colors.foreground, fontFamily: "Fraunces_700Bold" }]}>
                   Review Summary
                 </Text>
                 {[
@@ -671,13 +772,14 @@ export default function PostJobScreen() {
               </View>
             </View>
           )}
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Bottom navigation */}
       <View
         style={[
-          styles.bottomBar,
+          styles.bottomBarWrap,
           {
             paddingBottom: paddingBottom + 8,
             paddingHorizontal: 16,
@@ -687,6 +789,12 @@ export default function PostJobScreen() {
           },
         ]}
       >
+        {!canAdvance && getMissingHint() && (
+          <Text style={[styles.missingHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            {getMissingHint()}
+          </Text>
+        )}
+        <View style={styles.bottomBar}>
         {step > 0 && (
           <TouchableOpacity
             onPress={handleBack}
@@ -748,6 +856,7 @@ export default function PostJobScreen() {
             </Text>
           </TouchableOpacity>
         )}
+        </View>
       </View>
     </View>
   );
@@ -953,7 +1062,25 @@ const styles = StyleSheet.create({
   reviewRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   reviewLabel: { fontSize: 13 },
   reviewSub: { fontSize: 11, marginTop: 1 },
-  bottomBar: { flexDirection: "row", gap: 10, borderTopWidth: 1 },
+  bottomBarWrap: { borderTopWidth: 1, gap: 8 },
+  missingHint: { fontSize: 12, textAlign: "center" },
+  bottomBar: { flexDirection: "row", gap: 10 },
+  successCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  successTitle: { fontSize: 26, letterSpacing: -0.6 },
+  successSub: { fontSize: 14, lineHeight: 20, textAlign: "center" },
+  successJobChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, maxWidth: "100%" },
+  successJobTitle: { fontSize: 14, flexShrink: 1 },
+  successBtns: { width: "100%", gap: 12, alignItems: "center", marginTop: 8 },
+  successPrimaryBtn: { width: "100%", height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  successBtnText: { fontSize: 16, letterSpacing: -0.2 },
+  successGhostText: { fontSize: 14 },
   backBtn: {
     height: 52,
     flexDirection: "row",
